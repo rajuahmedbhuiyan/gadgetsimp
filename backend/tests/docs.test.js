@@ -131,6 +131,7 @@ describe("OpenAPI spec", () => {
     expect(spec.paths["/attributes/create"]).toBeUndefined();
     expect(spec.paths["/products/{id}"].patch).toBeUndefined();
     expect(spec.paths["/products/{id}"].put).toBeDefined();
+    expect(spec.paths["/variations/{id}"].delete).toBeDefined();
   });
 
   it("documents both social providers on the one endpoint", () => {

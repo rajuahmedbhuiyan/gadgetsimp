@@ -15,4 +15,5 @@ router.post("/generate", writeLimiter, validate(schemas.generate), controller.ge
 router.post("/filter", readLimiter, validate(schemas.filter), controller.filter);
 router.get("/:id", readLimiter, validate(schemas.byId), controller.getById);
 router.patch("/:id", writeLimiter, validate(schemas.patch), controller.patch);
+router.delete("/:id", writeLimiter, validate(schemas.byId), controller.remove);
 module.exports = router;

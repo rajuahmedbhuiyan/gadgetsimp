@@ -118,13 +118,13 @@ function validateProductType(input) {
       code: "SIMPLE_PRODUCT_PURCHASING_FIELDS_REQUIRED",
     });
   }
-  if (type === PRODUCT_TYPE.SIMPLE && input.variationOptions) {
-    throw ApiError.unprocessable("Simple products cannot define variation options", {
+  if (type === PRODUCT_TYPE.SIMPLE && (input.variationOptions || input.variations)) {
+    throw ApiError.unprocessable("Simple products cannot define variations", {
       code: "SIMPLE_PRODUCT_HAS_VARIATIONS",
     });
   }
-  if (type === PRODUCT_TYPE.VARIABLE && !input.variationOptions) {
-    throw ApiError.unprocessable("Variable products require variationOptions", {
+  if (type === PRODUCT_TYPE.VARIABLE && !input.variationOptions && !input.variations) {
+    throw ApiError.unprocessable("Variable products require variationOptions or variations", {
       code: "VARIATION_OPTIONS_REQUIRED",
     });
   }
@@ -152,6 +152,23 @@ function variationCombinations(context, options = {}) {
     });
   }
   return combinations;
+}
+
+function validateSubmittedVariations(context, variations) {
+  const signatures = new Set();
+  for (const variation of variations) {
+    variationCombinations(context, Object.fromEntries(
+      Object.entries(variation.options).map(([key, value]) => [key, [value]])
+    ));
+    const signature = Variant.signatureFor(variation.options);
+    if (signatures.has(signature)) {
+      throw ApiError.unprocessable("A variation combination was submitted more than once", {
+        code: "VARIATION_COMBINATION_DUPLICATE",
+      });
+    }
+    signatures.add(signature);
+  }
+  return variations;
 }
 
 function skuToken(value) {
@@ -199,32 +216,40 @@ async function create(input, actor) {
   await validateBrand(input.brandId);
   validateProductAttributes(context, input.attributes, input);
   const productType = validateProductType(input);
-  const combinations = productType === PRODUCT_TYPE.VARIABLE
+  const submittedVariations = input.variations
+    ? validateSubmittedVariations(context, input.variations)
+    : null;
+  const combinations = productType === PRODUCT_TYPE.VARIABLE && !submittedVariations
     ? variationCombinations(context, input.variationOptions)
     : [];
-  const { variationOptions, ...productInput } = input;
+  const { variationOptions, variations, ...productInput } = input;
   const product = withSeoDefaults(productInput);
   product.productType = productType;
-  product.variantOptionKeys = Object.keys(variationOptions ?? {});
-  if (product.status === PRODUCT_STATUS.ACTIVE && !product.publishedAt) product.publishedAt = new Date();
+  product.variantOptionKeys = variationOptions
+    ? Object.keys(variationOptions)
+    : [...new Set((variations ?? []).flatMap((variation) => Object.keys(variation.options)))];
+  if ([PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK].includes(product.status)) {
+    product.publishedAt = new Date();
+  }
 
   const productId = await withTransaction(async (session) => {
     const [created] = await Product.create(
       [{ ...product, createdBy: actor.id, updatedBy: actor.id }],
       sessionOption(session)
     );
-    if (combinations.length > 0) {
+    const variationRows = submittedVariations ?? combinations.map((options) => ({ options }));
+    if (variationRows.length > 0) {
       const baseSku = skuToken(created.sku ?? created.slug);
       await Variant.insertMany(
-        combinations.map((options, index) => ({
+        variationRows.map((variation, index) => ({
+          ...variation,
           productId: created._id,
-          options,
-          sku: `${baseSku}-${Object.values(options).map(skuToken).join("-")}`,
-          sellingPrice: created.sellingPrice,
-          originalPrice: created.originalPrice,
-          stock: created.stock,
-          status: created.status,
-          sortOrder: index,
+          sku: variation.sku ?? `${baseSku}-${Object.values(variation.options).map(skuToken).join("-")}`,
+          sellingPrice: variation.sellingPrice ?? created.sellingPrice,
+          originalPrice: variation.originalPrice ?? created.originalPrice,
+          stock: variation.stock ?? created.stock,
+          status: variation.status ?? created.status,
+          sortOrder: variation.sortOrder ?? index,
           createdBy: actor.id,
           updatedBy: actor.id,
         })),
@@ -247,13 +272,18 @@ async function update(id, input, actor) {
   const entityValues = { brandId: input.brandId ?? current.brandId };
   await validateBrand(entityValues.brandId);
   validateProductAttributes(context, attributes, entityValues);
+  if (input.variationOptions) variationCombinations(context, input.variationOptions);
 
   await withTransaction(async (session) => {
-    const product = withSeoDefaults(input);
-    if (product.status === PRODUCT_STATUS.ACTIVE && !product.publishedAt && !current.publishedAt) {
-      product.publishedAt = new Date();
-    }
-    Object.assign(current, product, { updatedBy: actor.id });
+    const { variationOptions, ...productInput } = input;
+    const product = withSeoDefaults(productInput);
+    product.publishedAt = product.status === PRODUCT_STATUS.DRAFT
+      ? null
+      : current.publishedAt ?? new Date();
+    Object.assign(current, product, {
+      variantOptionKeys: variationOptions ? Object.keys(variationOptions) : current.variantOptionKeys,
+      updatedBy: actor.id,
+    });
     await current.save(sessionOption(session));
   });
   return getById(id, { publicOnly: false });
@@ -262,7 +292,7 @@ async function update(id, input, actor) {
 async function getById(id, { publicOnly = true } = {}) {
   const filter = { _id: id, deletedAt: null };
   if (publicOnly) {
-    filter.status = PRODUCT_STATUS.ACTIVE;
+    filter.status = { $in: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK] };
     filter.visibility = PRODUCT_VISIBILITY.PUBLIC;
     filter.publishedAt = { $ne: null, $lte: new Date() };
   }
@@ -270,7 +300,7 @@ async function getById(id, { publicOnly = true } = {}) {
   if (!product) throw ApiError.notFound("Product not found");
 
   const variantFilter = { productId: product._id, deletedAt: null };
-  if (publicOnly) variantFilter.status = PRODUCT_STATUS.ACTIVE;
+  if (publicOnly) variantFilter.status = { $in: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK] };
   const variants = await Variant.find(variantFilter).sort({ sortOrder: 1, _id: 1 }).lean();
   return presentProduct(product, variants);
 }

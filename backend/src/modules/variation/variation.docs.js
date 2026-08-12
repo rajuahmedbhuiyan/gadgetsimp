@@ -15,9 +15,28 @@
  *             required: [options]
  *             properties:
  *               options: { type: object, additionalProperties: { type: array, items: { type: string } } }
- *           example: { options: { color: [black, white], size: [m, l] } }
+ *               sellingPrice: { type: number, minimum: 0 }
+ *               originalPrice: { type: number, minimum: 0 }
+ *               stock: { $ref: '#/components/schemas/Stock' }
+ *               status: { type: string, enum: [DRAFT, ACTIVE, OUT_OF_STOCK] }
+ *               image: { $ref: '#/components/schemas/ProductImage' }
+ *           example:
+ *             options: { color: [black, white], size: [m, l] }
+ *             sellingPrice: 1299
+ *             originalPrice: 1499
+ *             stock:
+ *               quantity: 8
+ *               trackInventory: true
+ *               allowBackorder: false
+ *               lowStockThreshold: 2
+ *               status: IN_STOCK
+ *             status: ACTIVE
+ *             image:
+ *               alt: Nike sports t-shirt
+ *               src: https://cdn.example.com/products/nike-shirt.webp
+ *               id: 1050
  *     responses:
- *       200: { description: Generated combinations returned without any database writes. }
+ *       200: { description: Generated combinations with supplied prices, stock, status and image; no database writes. }
  *       422: { $ref: '#/components/responses/ValidationError' }
  * /variations/filter:
  *   post:
@@ -66,7 +85,29 @@
  *               status: { type: string, enum: [DRAFT, ACTIVE, OUT_OF_STOCK] }
  *               image: { $ref: '#/components/schemas/ProductImage' }
  *               sortOrder: { type: integer, minimum: 0 }
- *           example: { sellingPrice: 1399, originalPrice: 1599, stock: { quantity: 12 }, image: { alt: Black medium t-shirt, src: https://cdn.example.com/variations/black-m.webp, id: 1060 } }
+ *           example:
+ *             sellingPrice: 1299
+ *             originalPrice: 1499
+ *             stock:
+ *               quantity: 8
+ *               trackInventory: true
+ *               allowBackorder: false
+ *               lowStockThreshold: 2
+ *               status: IN_STOCK
+ *             status: ACTIVE
+ *             image:
+ *               alt: Black medium t-shirt
+ *               src: https://cdn.example.com/products/nike-shirt-black-m.webp
+ *               id: 1050
  *     responses:
  *       200: { description: Supplied fields updated; omitted fields preserved. }
+ *   delete:
+ *     tags: [Variations]
+ *     summary: Delete a variation
+ *     description: Soft-deletes the variation so it no longer appears in product or variation queries.
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
+ *     responses:
+ *       200: { description: Variation deleted. }
+ *       404: { description: Variation not found. }
  */

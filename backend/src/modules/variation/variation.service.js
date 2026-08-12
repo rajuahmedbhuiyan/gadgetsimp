@@ -31,7 +31,12 @@ function generate(input) {
     });
   }
 
-  return combinations.map((options, index) => ({ options, sortOrder: index }));
+  const { options: _optionGroups, ...defaults } = input;
+  return combinations.map((options, index) => ({
+    options,
+    ...defaults,
+    sortOrder: index,
+  }));
 }
 
 async function filter(params) {
@@ -74,4 +79,14 @@ async function patch(id, input, actor) {
   return present(variation.toObject(), product);
 }
 
-module.exports = { generate, filter, getById, patch };
+async function remove(id, actor) {
+  const variation = await Variant.findOneAndUpdate(
+    { _id: id, deletedAt: null },
+    { deletedAt: new Date(), updatedBy: actor.id },
+    { new: true }
+  );
+  if (!variation) throw ApiError.notFound("Variation not found");
+  return { id: String(variation._id) };
+}
+
+module.exports = { generate, filter, getById, patch, remove };

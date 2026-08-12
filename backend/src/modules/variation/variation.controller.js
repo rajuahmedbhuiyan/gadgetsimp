@@ -20,5 +20,9 @@ async function patch(req, res) {
   const variation = await service.patch(req.validated.params.id, req.validated.body, actor(req));
   return sendResponse(res, { message: "Variation updated", data: { variation } });
 }
+async function remove(req, res) {
+  const deleted = await service.remove(req.validated.params.id, actor(req));
+  return sendResponse(res, { message: "Variation deleted", data: { deleted } });
+}
 
-module.exports = { generate, filter, getById, patch };
+module.exports = { generate, filter, getById, patch, remove };

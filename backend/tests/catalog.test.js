@@ -63,6 +63,32 @@ async function catalogFixture() {
 }
 
 describe("catalog", () => {
+  it("rejects frontend-managed publication dates", () => {
+    const product = {
+      name: "Sports T-Shirt",
+      slug: "sports-t-shirt",
+      description: "A production catalog fixture",
+      categoryId: new mongoose.Types.ObjectId().toString(),
+      sku: "SPORTS-TSHIRT",
+      sellingPrice: 1299,
+      thumbnail: { alt: "Sports T-Shirt", src: "https://cdn.example.com/shirt.webp" },
+      publishedAt: new Date().toISOString(),
+    };
+    const schemas = require("../src/modules/product/product.validation");
+    expect(() => schemas.createProduct.body.parse(product)).toThrow();
+    expect(() => schemas.updateProduct.body.parse(product)).toThrow();
+
+    const validUpdate = { ...product };
+    delete validUpdate.publishedAt;
+    validUpdate.variationOptions = { color: ["black"], size: ["m"] };
+    expect(schemas.updateProduct.body.parse(validUpdate).variationOptions).toEqual(validUpdate.variationOptions);
+    expect(() => schemas.updateProduct.body.parse({ ...validUpdate, productType: "VARIABLE" })).toThrow();
+    expect(() => schemas.updateProduct.body.parse({
+      ...validUpdate,
+      variations: [{ options: { color: "black", size: "m" } }],
+    })).toThrow();
+  });
+
   it("generates variations and returns minimal product relationships", async () => {
     const { category, brand } = await catalogFixture();
     const product = await productService.create(
@@ -93,9 +119,24 @@ describe("catalog", () => {
     expect(product.variations.every((variation) => variation.id && !variation._id)).toBe(true);
     expect(new Set(product.variations.map((variation) => variation.sku)).size).toBe(4);
 
-    const preview = variationService.generate({ options: { color: ["black", "white"], size: ["m", "l"] } });
+    const preview = variationService.generate({
+      options: { color: ["black", "white"], size: ["m", "l"] },
+      sellingPrice: 1299,
+      originalPrice: 1499,
+      stock: { quantity: 8, trackInventory: true, allowBackorder: false, lowStockThreshold: 2, status: "IN_STOCK" },
+      status: "ACTIVE",
+      image: { alt: "Sports T-Shirt", src: "https://cdn.example.com/shirt.webp" },
+    });
     expect(preview).toHaveLength(4);
-    expect(preview[0]).toEqual({ options: { color: "black", size: "m" }, sortOrder: 0 });
+    expect(preview[0]).toMatchObject({
+      options: { color: "black", size: "m" },
+      sellingPrice: 1299,
+      originalPrice: 1499,
+      stock: { quantity: 8, status: "IN_STOCK" },
+      status: "ACTIVE",
+      image: { alt: "Sports T-Shirt", src: "https://cdn.example.com/shirt.webp" },
+      sortOrder: 0,
+    });
     expect(await Variant.countDocuments({ productId: product.id })).toBe(4);
   });
 
@@ -135,6 +176,10 @@ describe("catalog", () => {
       lowStockThreshold: original.stock.lowStockThreshold,
       status: original.stock.status,
     });
+
+    const deleted = await variationService.remove(original.id, actor);
+    expect(deleted).toEqual({ id: original.id });
+    await expect(variationService.getById(original.id)).rejects.toMatchObject({ statusCode: 404 });
   });
 
   it("lists via POST with OR within filters and AND across filters", async () => {

@@ -8,7 +8,7 @@ const { mapCatalogRecord } = require("../../shared/catalogSchemas");
 
 function publicMatch({ categoryId, search }) {
   const match = {
-    status: PRODUCT_STATUS.ACTIVE,
+    status: { $in: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK] },
     visibility: PRODUCT_VISIBILITY.PUBLIC,
     deletedAt: null,
     publishedAt: { $ne: null, $lte: new Date() },
@@ -52,7 +52,7 @@ function variantFilterMatch(filters) {
 function matchingVariantsLookup(filters, as = "_matchingVariants", { groupByPrice = false } = {}) {
   const match = {
     $expr: { $eq: ["$productId", "$$productId"] },
-    status: PRODUCT_STATUS.ACTIVE,
+    status: { $in: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK] },
     deletedAt: null,
     ...variantFilterMatch(filters),
   };
@@ -204,7 +204,7 @@ function facetPipeline(attribute, allFilters) {
           {
             $match: {
               $expr: { $eq: ["$productId", "$$productId"] },
-              status: PRODUCT_STATUS.ACTIVE,
+              status: { $in: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK] },
               deletedAt: null,
               ...variantFilterMatch(otherVariantFilters),
             },

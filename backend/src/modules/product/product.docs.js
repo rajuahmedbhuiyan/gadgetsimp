@@ -14,7 +14,6 @@
  *         shortDescription: { type: string, example: Lightweight performance t-shirt. }
  *         categoryId: { $ref: '#/components/schemas/CatalogId' }
  *         brandId: { $ref: '#/components/schemas/CatalogId' }
- *         productType: { type: string, enum: [SIMPLE, VARIABLE], example: VARIABLE }
  *         sku: { type: string, example: NIKE-SPORTS }
  *         currency: { type: string, enum: [BDT], default: BDT, example: BDT }
  *         sellingPrice: { type: number, minimum: 0, example: 1299 }
@@ -42,15 +41,42 @@
  *         seo:
  *           allOf: [{ $ref: '#/components/schemas/CatalogSeo' }]
  *           description: Optional. Missing SEO fields are derived from product name, descriptions, slug, thumbnail and tags.
- *         publishedAt: { type: string, format: date-time, nullable: true }
+ *     ProductVariationWrite:
+ *       type: object
+ *       required: [options]
+ *       properties:
+ *         options: { type: object, additionalProperties: { type: string }, example: { color: black, size: m } }
+ *         sku: { type: string, example: NIKE-SPORTS-BLACK-M }
+ *         barcode: { type: string, example: '8941100500012' }
+ *         sellingPrice: { type: number, minimum: 0, example: 1299 }
+ *         originalPrice: { type: number, minimum: 0, example: 1499 }
+ *         stock: { $ref: '#/components/schemas/Stock' }
+ *         status: { type: string, enum: [DRAFT, ACTIVE, OUT_OF_STOCK], example: ACTIVE }
+ *         image: { $ref: '#/components/schemas/ProductImage' }
+ *         sortOrder: { type: integer, minimum: 0, example: 0 }
  *     ProductCreate:
+ *       allOf:
+ *         - $ref: '#/components/schemas/ProductWrite'
+ *         - type: object
+ *           properties:
+ *             productType: { type: string, enum: [SIMPLE, VARIABLE], example: VARIABLE }
+ *             variationOptions:
+ *               type: object
+ *               description: Required for VARIABLE products. Variations are persisted only during POST /products.
+ *               additionalProperties: { type: array, items: { type: string } }
+ *               example: { color: [black, white], size: [m, l] }
+ *             variations:
+ *               type: array
+ *               description: Generated variation rows to save with this product. Use this instead of variationOptions when prices, stock, SKU or image differ per variation.
+ *               items: { $ref: '#/components/schemas/ProductVariationWrite' }
+ *     ProductUpdate:
  *       allOf:
  *         - $ref: '#/components/schemas/ProductWrite'
  *         - type: object
  *           properties:
  *             variationOptions:
  *               type: object
- *               description: Required for VARIABLE products. Variations are persisted only during POST /products.
+ *               description: Updates the product's variation option keys. Existing variation records are preserved.
  *               additionalProperties: { type: array, items: { type: string } }
  *               example: { color: [black, white], size: [m, l] }
  *     ProductFilterRequest:
@@ -97,7 +123,22 @@
  *             featured: true
  *             tags: [sportswear, training]
  *             attributes: { material: cotton, fit: regular }
- *             variationOptions: { color: [black, white], size: [m, l] }
+ *             variations:
+ *               - options: { color: black, size: m }
+ *                 sku: NIKE-SPORTS-BLACK-M
+ *                 sellingPrice: 1299
+ *                 originalPrice: 1499
+ *                 stock: { quantity: 8, trackInventory: true, allowBackorder: false, lowStockThreshold: 2, status: IN_STOCK }
+ *                 status: ACTIVE
+ *                 image: { alt: Black medium t-shirt, src: https://cdn.example.com/products/nike-shirt-black-m.webp, id: 1050 }
+ *                 sortOrder: 0
+ *               - options: { color: white, size: l }
+ *                 sku: NIKE-SPORTS-WHITE-L
+ *                 sellingPrice: 1349
+ *                 stock: { quantity: 5, status: IN_STOCK }
+ *                 status: ACTIVE
+ *                 image: { alt: White large t-shirt, src: https://cdn.example.com/products/nike-shirt-white-l.webp }
+ *                 sortOrder: 1
  *             shipping:
  *               requiresShipping: true
  *               freeShipping: false
@@ -107,8 +148,19 @@
  *             images:
  *               - { alt: Front view, src: https://cdn.example.com/products/nike-shirt-front.webp, id: 1043 }
  *               - { alt: Back view, src: https://cdn.example.com/products/nike-shirt-back.webp }
- *             seo: { title: Nike Sports T-Shirt | Buy Online }
- *             publishedAt: '2026-08-13T09:00:00.000Z'
+ *             seo:
+ *               title: Nike Sports T-Shirt | Buy Online
+ *               description: Shop the Nike Sports T-Shirt for training and everyday performance.
+ *               keywords: [nike t-shirt, sports t-shirt, training shirt]
+ *               canonicalUrl: https://gadgetsimp.dev/products/nike-sports-t-shirt
+ *               noIndex: false
+ *               noFollow: false
+ *               ogTitle: Nike Sports T-Shirt
+ *               ogDescription: Lightweight performance t-shirt for training.
+ *               ogImage: https://cdn.example.com/products/nike-shirt-og.webp
+ *               twitterTitle: Nike Sports T-Shirt
+ *               twitterDescription: Lightweight performance t-shirt for training.
+ *               twitterImage: https://cdn.example.com/products/nike-shirt-twitter.webp
  *     responses:
  *       201: { description: Product created. }
  *       401: { $ref: '#/components/responses/Unauthorized' }
@@ -162,8 +214,47 @@
  *       required: true
  *       content:
  *         application/json:
- *           schema: { $ref: '#/components/schemas/ProductWrite' }
- *           example: { name: Nike Sports T-Shirt, slug: nike-sports-t-shirt, description: Updated product description., categoryId: 66bca1f8d7432e0012345678, brandId: 66bca1f8d7432e0012345679, productType: VARIABLE, sku: NIKE-SPORTS, currency: BDT, sellingPrice: 1399, originalPrice: 1599, stock: { quantity: 18 }, status: ACTIVE, visibility: PUBLIC, featured: true, tags: [sportswear], attributes: { material: cotton }, thumbnail: { alt: Black Nike sports t-shirt, src: https://cdn.example.com/products/nike-shirt.webp, id: 1042 }, images: [] }
+ *           schema: { $ref: '#/components/schemas/ProductUpdate' }
+ *           example:
+ *             name: Nike Sports T-Shirt
+ *             slug: nike-sports-t-shirt
+ *             description: Updated breathable performance t-shirt for everyday training.
+ *             shortDescription: Lightweight performance t-shirt.
+ *             categoryId: 66bca1f8d7432e0012345678
+ *             brandId: 66bca1f8d7432e0012345679
+ *             sku: NIKE-SPORTS
+ *             currency: BDT
+ *             sellingPrice: 1399
+ *             originalPrice: 1599
+ *             stock: { quantity: 18, trackInventory: true, allowBackorder: false, lowStockThreshold: 5, status: IN_STOCK }
+ *             status: ACTIVE
+ *             visibility: PUBLIC
+ *             featured: true
+ *             tags: [sportswear, training]
+ *             attributes: { material: cotton, fit: regular }
+ *             variationOptions: { color: [black, white], size: [m, l] }
+ *             shipping:
+ *               requiresShipping: true
+ *               freeShipping: false
+ *               weight: { value: 0.25, unit: kg }
+ *               dimensions: { length: 30, width: 24, height: 3, unit: cm }
+ *             thumbnail: { alt: Black Nike sports t-shirt, src: https://cdn.example.com/products/nike-shirt.webp, id: 1042 }
+ *             images:
+ *               - { alt: Front view, src: https://cdn.example.com/products/nike-shirt-front.webp, id: 1043 }
+ *               - { alt: Back view, src: https://cdn.example.com/products/nike-shirt-back.webp }
+ *             seo:
+ *               title: Nike Sports T-Shirt | Buy Online
+ *               description: Shop the Nike Sports T-Shirt for training and everyday performance.
+ *               keywords: [nike t-shirt, sports t-shirt, training shirt]
+ *               canonicalUrl: https://gadgetsimp.dev/products/nike-sports-t-shirt
+ *               noIndex: false
+ *               noFollow: false
+ *               ogTitle: Nike Sports T-Shirt
+ *               ogDescription: Lightweight performance t-shirt for training.
+ *               ogImage: https://cdn.example.com/products/nike-shirt-og.webp
+ *               twitterTitle: Nike Sports T-Shirt
+ *               twitterDescription: Lightweight performance t-shirt for training.
+ *               twitterImage: https://cdn.example.com/products/nike-shirt-twitter.webp
  *     responses:
  *       200: { description: Product replaced. }
  *   delete:

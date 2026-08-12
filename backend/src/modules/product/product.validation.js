@@ -26,6 +26,23 @@ const variationOptions = z.record(
   z.array(z.string().trim().min(1).max(120)).min(1).max(100)
     .refine((values) => new Set(values).size === values.length, { message: "Option values must be unique" })
 );
+const variation = z.object({
+  options: z.record(attributeKey, z.string().trim().min(1).max(120)),
+  sku: z.string().trim().min(1).max(120).optional(),
+  barcode: z.string().trim().max(120).optional(),
+  sellingPrice: z.coerce.number().min(0).optional(),
+  originalPrice: z.coerce.number().min(0).optional(),
+  stock: stock.optional(),
+  status: z.enum(PRODUCT_STATUS_VALUES).optional(),
+  image: image.optional(),
+  sortOrder: z.coerce.number().int().min(0).optional(),
+}).strict().refine(
+  (body) => body.originalPrice == null || body.sellingPrice == null || body.originalPrice >= body.sellingPrice,
+  {
+  message: "originalPrice must not be less than sellingPrice",
+  path: ["originalPrice"],
+  }
+);
 const shape = {
   name: z.string().trim().min(1).max(240),
   slug,
@@ -33,7 +50,6 @@ const shape = {
   shortDescription: z.string().trim().max(600).optional(),
   categoryId: objectId,
   brandId: objectId.optional(),
-  productType: z.enum(PRODUCT_TYPE_VALUES).optional(),
   sku: z.string().trim().min(1).max(120).optional(),
   status: z.enum(PRODUCT_STATUS_VALUES).optional(),
   visibility: z.enum(PRODUCT_VISIBILITY_VALUES).optional(),
@@ -56,21 +72,25 @@ const shape = {
   thumbnail: image,
   images: z.array(image).max(100).default([]),
   seo: seo.optional(),
-  publishedAt: z.coerce.date().nullable().optional(),
 };
 
 const priceOrderIsValid = (body) =>
   body.originalPrice == null || body.sellingPrice == null || body.originalPrice >= body.sellingPrice;
 
 const createProduct = {
-  body: z.object({ ...shape, variationOptions: variationOptions.optional() }).strict().refine(priceOrderIsValid, {
+  body: z.object({
+    ...shape,
+    productType: z.enum(PRODUCT_TYPE_VALUES).optional(),
+    variationOptions: variationOptions.optional(),
+    variations: z.array(variation).min(1).max(500).optional(),
+  }).strict().refine(priceOrderIsValid, {
     message: "originalPrice must not be less than sellingPrice",
     path: ["originalPrice"],
   }),
 };
 const updateProduct = {
   params: objectIdParam,
-  body: z.object(shape).strict().refine(priceOrderIsValid, {
+  body: z.object({ ...shape, variationOptions: variationOptions.optional() }).strict().refine(priceOrderIsValid, {
     message: "originalPrice must not be less than sellingPrice",
     path: ["originalPrice"],
   }),

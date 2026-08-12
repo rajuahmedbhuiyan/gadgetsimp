@@ -3,7 +3,7 @@
 const { z } = require("zod");
 const { objectId, objectIdParam } = require("../../shared/validators");
 const { PAGINATION, PRODUCT_STATUS_VALUES, STOCK_STATUS_VALUES } = require("../../shared/constants");
-const { image } = require("../../shared/catalogValidation");
+const { image, stock } = require("../../shared/catalogValidation");
 
 const optionKey = z.string().regex(/^[a-z][a-z0-9_]*$/).max(80);
 const partialStock = z.object({
@@ -21,10 +21,18 @@ const generate = {
       z.array(z.string().trim().min(1).max(120)).min(1).max(100)
         .refine((values) => new Set(values).size === values.length, { message: "Option values must be unique" })
     ),
+    sellingPrice: z.coerce.number().min(0).optional(),
+    originalPrice: z.coerce.number().min(0).optional(),
+    stock: stock.transform((value) => ({ ...value, status: value.status ?? "IN_STOCK" })).optional(),
+    status: z.enum(PRODUCT_STATUS_VALUES).optional(),
+    image: image.optional(),
   }).strict().refine((body) => Object.keys(body.options).length > 0, {
     message: "At least one variation option is required",
     path: ["options"],
-  }),
+  }).refine(
+    (body) => body.originalPrice == null || body.sellingPrice == null || body.originalPrice >= body.sellingPrice,
+    { message: "originalPrice must not be less than sellingPrice", path: ["originalPrice"] }
+  ),
 };
 
 const filter = {
