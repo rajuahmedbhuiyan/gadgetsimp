@@ -26,6 +26,16 @@ router.put(
   validate(schemas.sortCategories),
   controller.sort
 );
+// Bulk toggle, declared before `/:id` so the literal path is not swallowed.
+router.patch(
+  "/show-in-home",
+  writeLimiter,
+  authenticate,
+  authorize(ROLES.ADMIN),
+  validate(schemas.toggleShowInHome),
+  controller.setShowInHome
+);
+
 router.post("/", writeLimiter, authenticate, authorize(ROLES.ADMIN), validate(schemas.createCategory), controller.create);
 router.get("/:id/configuration", readLimiter, validate(schemas.categoryById), controller.configuration);
 router.get("/:id", readLimiter, validate(schemas.categoryById), controller.getById);

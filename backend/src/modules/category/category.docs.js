@@ -41,6 +41,15 @@
  *           example: [66bca1f8d7432e0012345683, 66bca1f8d7432e0012345680, 66bca1f8d7432e0012345684]
  *         seo: { $ref: '#/components/schemas/CatalogSeo' }
  *         sortOrder: { type: integer, minimum: 0, example: 20 }
+ *         showInHome:
+ *           type: boolean
+ *           default: false
+ *           description: >
+ *             Offers this category for the home page. Curation only - it says
+ *             "eligible", not "shown": `POST /shop/categories` still hides an
+ *             eligible category that has nothing to sell. Also settable in bulk
+ *             through `PATCH /categories/show-in-home`.
+ *           example: true
  *
  * /categories:
  *   post:
@@ -75,10 +84,62 @@
  *               twitterDescription: Explore our t-shirt collection.
  *               twitterImage: https://cdn.example.com/categories/t-shirts-twitter.webp
  *             sortOrder: 20
+ *             showInHome: true
  *     responses:
  *       201: { description: Category created. }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       422: { $ref: '#/components/responses/ValidationError' }
+ *
+ * /categories/show-in-home:
+ *   patch:
+ *     tags: [Categories]
+ *     summary: Set the home-page flag on several categories
+ *     description: >
+ *       Bulk toggle for `showInHome`, requiring `ROLE_ADMIN` or above.
+ *
+ *
+ *       Takes a list because the screen using it is a multi-select on a
+ *       category table. It is applied as a single `updateMany`, so the
+ *       selection cannot end up half-flagged.
+ *
+ *
+ *       `showInHome` is the state you want, not a flip - so retrying after a
+ *       dropped response cannot silently invert what you just set. Unknown ids
+ *       are reported rather than ignored.
+ *
+ *
+ *       The flag is curation only: `POST /shop/categories` still hides a
+ *       flagged category that has nothing to sell.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [ids, showInHome]
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 minItems: 1
+ *                 maxItems: 200
+ *                 items: { $ref: '#/components/schemas/CatalogId' }
+ *               showInHome: { type: boolean }
+ *           example:
+ *             ids: [6712f0c2a1b4d3e5f6a7b8c9, 6712f0c2a1b4d3e5f6a7b8ca]
+ *             showInHome: true
+ *     responses:
+ *       200:
+ *         description: Updated categories.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *       422:
+ *         description: Validation failed, or one of the ids does not exist.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *
  * /categories/filter:
  *   post:
@@ -275,6 +336,7 @@
  *               noIndex: false
  *               noFollow: false
  *             sortOrder: 20
+ *             showInHome: true
  *     responses:
  *       200: { description: Category replaced. }
  *       401: { $ref: '#/components/responses/Unauthorized' }

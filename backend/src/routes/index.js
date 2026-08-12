@@ -9,6 +9,8 @@ const attributeRoutes = require("../modules/attribute/attribute.routes");
 const categoryRoutes = require("../modules/category/category.routes");
 const brandRoutes = require("../modules/brand/brand.routes");
 const productRoutes = require("../modules/product/product.routes");
+const shopRoutes = require("../modules/shop/shop.routes");
+const cartRoutes = require("../modules/cart/cart.routes");
 const productPublicRoutes = require("../modules/product-public/product-public.routes");
 const variationRoutes = require("../modules/variation/variation.routes");
 const { sendResponse } = require("../shared/sendResponse");
@@ -31,6 +33,8 @@ const modules = [
   { path: "/brands", router: brandRoutes },
   { path: "/products", router: productPublicRoutes },
   { path: "/products", router: productRoutes },
+  { path: "/shop", router: shopRoutes },
+  { path: "/cart", router: cartRoutes },
   { path: "/variations", router: variationRoutes },
 ];
 

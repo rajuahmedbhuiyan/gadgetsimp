@@ -20,6 +20,9 @@ const shape = {
   attributes: z.array(objectId).max(100).default([]),
   seo: seo.optional(),
   sortOrder: z.coerce.number().int().min(0).default(0),
+  // Settable on create/update as well as through the bulk toggle, so a
+  // category can be curated the moment it is made.
+  showInHome: z.boolean().default(false),
 };
 
 const createCategory = { body: z.object(shape).strict() };
@@ -40,7 +43,7 @@ const listCategories = {
           limit: z.coerce.number().int().min(1).max(PAGINATION.MAX_LIMIT).default(PAGINATION.DEFAULT_LIMIT),
         })
         .strict()
-        .default({}),
+        .prefault({}),
     })
     .strict(),
 };
@@ -79,7 +82,32 @@ const sortCategories = {
 
 const categoryById = { params: objectIdParam };
 
+/**
+ * Bulk toggle for the home-page flag.
+ *
+ * Takes a list because the screen that uses it is a multi-select on a category
+ * table - "feature these five". Sending one request per row would be five
+ * round trips and five chances to end up half-applied.
+ *
+ * `showInHome` is explicit rather than a flip, so the call is idempotent: the
+ * client sends the state it wants, and retrying after a dropped response
+ * cannot silently invert what it just set.
+ */
+const toggleShowInHome = {
+  body: z
+    .object({
+      ids: z
+        .array(objectId)
+        .min(1, "Provide at least one category id")
+        .max(200)
+        .refine((ids) => new Set(ids).size === ids.length, { message: "Ids must be unique" }),
+      showInHome: z.boolean(),
+    })
+    .strict(),
+};
+
 module.exports = {
+  toggleShowInHome,
   createCategory,
   updateCategory,
   listCategories,

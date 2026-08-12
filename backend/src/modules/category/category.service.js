@@ -398,4 +398,39 @@ async function remove(id, actor) {
   return { id: String(category._id) };
 }
 
-module.exports = { create, update, getById, list, filterGrouped, sort, remove };
+/**
+ * Sets the home-page flag on several categories at once.
+ *
+ * A single `updateMany` rather than a loop of saves: one round trip, and the
+ * database applies it as one operation, so a partial failure cannot leave half
+ * the selection flagged.
+ *
+ * Unknown ids are reported rather than ignored - a client that selected six
+ * rows and had four updated should be told, not left to notice later.
+ */
+async function setShowInHome({ ids, showInHome }, actor) {
+  const existing = await Category.find({ _id: { $in: ids }, deletedAt: null })
+    .select({ _id: 1 })
+    .lean();
+
+  if (existing.length !== ids.length) {
+    const found = new Set(existing.map((category) => String(category._id)));
+    throw ApiError.unprocessable("One or more categories do not exist", {
+      code: "CATEGORY_NOT_FOUND",
+      errors: ids
+        .filter((id) => !found.has(String(id)))
+        .map((id) => ({ field: "ids", message: `Unknown category ${id}` })),
+    });
+  }
+
+  await Category.updateMany(
+    { _id: { $in: ids }, deletedAt: null },
+    { $set: { showInHome, updatedBy: actor.id } }
+  );
+
+  const updated = await Category.find({ _id: { $in: ids } }).lean();
+
+  return updated.map((category) => mapCatalogRecord(category));
+}
+
+module.exports = { create, update, getById, list, filterGrouped, sort, remove, setShowInHome };

@@ -39,6 +39,14 @@ const categorySchema = new mongoose.Schema(
       index: true,
     },
     image: { type: String, trim: true, maxlength: 1024 },
+    /**
+     * Merchandising flag: whether this category is offered for the home page.
+     *
+     * Curation only - it says "eligible", not "shown". `POST /shop/categories`
+     * still hides an eligible category that has nothing to sell, because a
+     * tile leading to an empty grid is worse than one tile fewer.
+     */
+    showInHome: { type: Boolean, default: false, index: true },
     attributes: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Attribute" }],
       default: [],
@@ -54,5 +62,7 @@ const categorySchema = new mongoose.Schema(
 
 categorySchema.index({ parentId: 1, status: 1, sortOrder: 1 });
 categorySchema.index({ status: 1, visibility: 1, sortOrder: 1 });
+// The home-page query: eligible categories in merchandising order.
+categorySchema.index({ showInHome: 1, status: 1, sortOrder: 1 });
 
 module.exports = mongoose.model("Category", categorySchema);

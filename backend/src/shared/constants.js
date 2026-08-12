@@ -227,6 +227,52 @@ const STOCK_STATUS_VALUES = Object.freeze(Object.values(STOCK_STATUS));
 
 const CURRENCY_VALUES = Object.freeze(["BDT", "USD", "EUR", "GBP"]);
 
+/* --------------------------------- Cart ---------------------------------- */
+
+/**
+ * Cart limits.
+ *
+ * A cart is user-controlled, unbounded storage attached to an account, so it
+ * needs ceilings in three independent places: how much of one thing you may
+ * hold, how many distinct things, and how much one request may change. Without
+ * the third, a single call could add ten thousand lines and the first two caps
+ * would never be consulted.
+ *
+ * `MAX_QUANTITY_PER_LINE` is a sanity bound, not a stock rule - real stock is
+ * checked per item against the product or variant and is almost always the
+ * lower of the two.
+ */
+const CART = Object.freeze({
+  MAX_LINES: 100,
+  MAX_QUANTITY_PER_LINE: 100,
+  MAX_BATCH_SIZE: 50,
+});
+
+/**
+ * Why a cart line is not simply buyable.
+ *
+ * These are **advisory** and travel on the line itself rather than failing the
+ * read: a cart whose product was unpublished last night must still load, or
+ * the shopper is locked out of their own basket with no way to remove the
+ * offending row. The checkout is where they become blocking.
+ *
+ * `QUANTITY_ADJUSTED` and `PRICE_CHANGED` are the two the UI should surface
+ * loudly - both mean the shopper is looking at something other than what they
+ * chose, and both are silent data loss if the client ignores them.
+ */
+const CART_ISSUE = Object.freeze({
+  PRODUCT_UNAVAILABLE: "PRODUCT_UNAVAILABLE",
+  VARIANT_UNAVAILABLE: "VARIANT_UNAVAILABLE",
+  OUT_OF_STOCK: "OUT_OF_STOCK",
+  // Distinct from OUT_OF_STOCK: some remain, just fewer than are being held.
+  // The fix is a smaller number, not removal, and the message should say so.
+  INSUFFICIENT_STOCK: "INSUFFICIENT_STOCK",
+  QUANTITY_ADJUSTED: "QUANTITY_ADJUSTED",
+  PRICE_CHANGED: "PRICE_CHANGED",
+});
+
+const CART_ISSUE_VALUES = Object.freeze(Object.values(CART_ISSUE));
+
 const REFRESH_COOKIE_NAME = "gs_refresh_token";
 
 /**
@@ -283,6 +329,9 @@ module.exports = {
   STOCK_STATUS,
   STOCK_STATUS_VALUES,
   CURRENCY_VALUES,
+  CART,
+  CART_ISSUE,
+  CART_ISSUE_VALUES,
   REFRESH_COOKIE_NAME,
   EMAIL_VERIFICATION_TTL_MINUTES,
   PASSWORD_RESET_TTL_MINUTES,

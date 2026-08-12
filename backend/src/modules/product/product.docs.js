@@ -172,6 +172,276 @@
  *       201: { description: Product created. }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       422: { $ref: '#/components/responses/ValidationError' }
+ * /products/{id}/general:
+ *   patch:
+ *     tags: [Products]
+ *     summary: Update general details
+ *     description: >
+ *       One panel of the admin product form. `PUT /products/{id}` replaces the
+ *       whole document, so saving a single panel through it means round-tripping
+ *       every field - and anything the form did not load comes back as a silent
+ *       reset. These section patches save only what the panel owns.
+ *
+ *
+ *       `productType` is not accepted: flipping VARIABLE to SIMPLE would orphan
+ *       every generated SKU. Setting `status` to ACTIVE stamps `publishedAt`;
+ *       setting it to DRAFT clears it. Changing `categoryIds` revalidates the
+ *       stored attributes against the new categories.
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               name: { type: string, example: Nike Sports T-Shirt }
+ *               slug: { type: string, example: nike-sports-t-shirt }
+ *               brandId: { type: string, nullable: true, example: 6712f0c2a1b4d3e5f6a7b8c9 }
+ *               categoryIds: { type: array, items: { type: string }, example: [6712f0c2a1b4d3e5f6a7b8c9] }
+ *               sku: { type: string, example: NIKE-SPORTS }
+ *               status: { type: string, enum: [DRAFT, ACTIVE, OUT_OF_STOCK], example: ACTIVE }
+ *               visibility: { type: string, enum: [PUBLIC, HIDDEN], example: PUBLIC }
+ *               featured: { type: boolean, example: true }
+ *           example:
+ *             name: Nike Sports T-Shirt
+ *             slug: nike-sports-t-shirt
+ *             brandId: 6712f0c2a1b4d3e5f6a7b8c9
+ *             categoryIds: [6712f0c2a1b4d3e5f6a7b8c9]
+ *             status: ACTIVE
+ *             visibility: PUBLIC
+ *             featured: true
+ *     responses:
+ *       200: { description: General details updated. }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       422: { $ref: '#/components/responses/ValidationError' }
+ *
+ * /products/{id}/description:
+ *   patch:
+ *     tags: [Products]
+ *     summary: Update descriptions
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               description: { type: string, example: Breathable performance t-shirt for everyday training. }
+ *               shortDescription: { type: string, nullable: true, example: Lightweight performance t-shirt. }
+ *           example:
+ *             description: Breathable performance t-shirt for everyday training, cut for movement.
+ *             shortDescription: Lightweight performance t-shirt.
+ *     responses:
+ *       200: { description: Description updated. }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       422: { $ref: '#/components/responses/ValidationError' }
+ *
+ * /products/{id}/pricing:
+ *   patch:
+ *     tags: [Products]
+ *     summary: Update pricing
+ *     description: >
+ *       `originalPrice` must stay at or above `sellingPrice`, and the rule is
+ *       enforced against the **stored** record - so raising `sellingPrice`
+ *       alone past the existing `originalPrice` is rejected with
+ *       `PRODUCT_PRICE_ORDER_INVALID`. Send `originalPrice: null` to remove the
+ *       struck-through price.
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               sellingPrice: { type: number, minimum: 0, example: 1299 }
+ *               originalPrice: { type: number, minimum: 0, nullable: true, example: 1499 }
+ *               currency: { type: string, enum: [BDT], example: BDT }
+ *           example: { sellingPrice: 1299, originalPrice: 1499 }
+ *     responses:
+ *       200: { description: Pricing updated. }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       422:
+ *         description: Validation failed, or the price order is inconsistent with the stored record.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             example:
+ *               success: false
+ *               statusCode: 422
+ *               message: originalPrice must not be less than sellingPrice
+ *               code: PRODUCT_PRICE_ORDER_INVALID
+ *               errors:
+ *                 - field: originalPrice
+ *                   message: originalPrice (1499) is below sellingPrice (2000)
+ *
+ * /products/{id}/stock:
+ *   patch:
+ *     tags: [Products]
+ *     summary: Update stock
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [stock]
+ *             properties:
+ *               stock: { $ref: '#/components/schemas/Stock' }
+ *           example: { stock: { quantity: 120, lowStockThreshold: 5, trackInventory: true } }
+ *     responses:
+ *       200: { description: Stock updated. }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       422: { $ref: '#/components/responses/ValidationError' }
+ *
+ * /products/{id}/attributes:
+ *   patch:
+ *     tags: [Products]
+ *     summary: Update attributes and tags
+ *     description: >
+ *       Attributes are revalidated against the categories already on the
+ *       product, so a key the category does not configure is rejected with
+ *       `PRODUCT_ATTRIBUTE_INVALID`.
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               attributes: { type: object, additionalProperties: true, example: { material: cotton, fit: regular } }
+ *               tags: { type: array, items: { type: string }, example: [sportswear, training] }
+ *           example: { attributes: { material: cotton }, tags: [sportswear, training] }
+ *     responses:
+ *       200: { description: Attributes and tags updated. }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       422: { $ref: '#/components/responses/ValidationError' }
+ *
+ * /products/{id}/media:
+ *   patch:
+ *     tags: [Products]
+ *     summary: Update thumbnail and gallery
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               thumbnail: { $ref: '#/components/schemas/ProductImage' }
+ *               images: { type: array, items: { $ref: '#/components/schemas/ProductImage' } }
+ *           example:
+ *             thumbnail: { alt: Black Nike sports t-shirt, src: https://cdn.example.com/products/nike-shirt.webp, id: 1042 }
+ *             images:
+ *               - { alt: Front view, src: https://cdn.example.com/products/nike-shirt-front.webp, id: 1043 }
+ *     responses:
+ *       200: { description: Media updated. }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       422: { $ref: '#/components/responses/ValidationError' }
+ *
+ * /products/{id}/featured:
+ *   patch:
+ *     tags: [Products]
+ *     summary: Feature or unfeature a product
+ *     description: A one-decision toggle, for a product table's quick actions.
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [featured]
+ *             properties:
+ *               featured: { type: boolean, example: true }
+ *           example: { featured: true }
+ *     responses:
+ *       200: { description: Featured flag updated. }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       422: { $ref: '#/components/responses/ValidationError' }
+ *
+ * /products/{id}/status:
+ *   patch:
+ *     tags: [Products]
+ *     summary: Publish, unpublish or hide a product
+ *     description: >
+ *       Setting `status` to ACTIVE stamps `publishedAt` if it was never set;
+ *       setting DRAFT clears it. `visibility` controls whether a published
+ *       product appears in the storefront at all.
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               status: { type: string, enum: [DRAFT, ACTIVE, OUT_OF_STOCK], example: ACTIVE }
+ *               visibility: { type: string, enum: [PUBLIC, HIDDEN], example: PUBLIC }
+ *           example: { status: ACTIVE, visibility: PUBLIC }
+ *     responses:
+ *       200: { description: Status updated. }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       422: { $ref: '#/components/responses/ValidationError' }
+ *
+ * /products/{id}/seo:
+ *   patch:
+ *     tags: [Products]
+ *     summary: Update SEO
+ *     description: >
+ *       Missing SEO fields are derived from the **stored** product - name,
+ *       descriptions, slug, thumbnail and tags - so sending only a title still
+ *       yields a complete SEO block.
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [seo]
+ *             properties:
+ *               seo: { $ref: '#/components/schemas/CatalogSeo' }
+ *           example:
+ *             seo:
+ *               title: Nike Sports T-Shirt | Buy Online
+ *               description: Shop the Nike Sports T-Shirt for training and everyday performance.
+ *               keywords: [nike t-shirt, sports t-shirt, training shirt]
+ *               canonicalUrl: https://gadgetsimp.dev/products/nike-sports-t-shirt
+ *               noIndex: false
+ *               noFollow: false
+ *               ogTitle: Nike Sports T-Shirt
+ *               ogDescription: Lightweight performance t-shirt for training.
+ *               ogImage: https://cdn.example.com/products/nike-shirt-og.webp
+ *               twitterTitle: Nike Sports T-Shirt
+ *               twitterDescription: Lightweight performance t-shirt for training.
+ *               twitterImage: https://cdn.example.com/products/nike-shirt-twitter.webp
+ *     responses:
+ *       200: { description: SEO updated. }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       422: { $ref: '#/components/responses/ValidationError' }
+ *
  * /products/filter:
  *   post:
  *     tags: [Products]
@@ -189,19 +459,6 @@
  *             pagination: { page: 0, limit: 24 }
  *     responses:
  *       200: { description: Paginated products with minimal categoryIds and brandId objects. }
- * /products/filter-options:
- *   post:
- *     tags: [Products Public]
- *     summary: Get product filter options and counts
- *     security: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema: { type: object, required: [categoryId], properties: { categoryId: { $ref: '#/components/schemas/CatalogId' }, filters: { type: object, additionalProperties: true }, search: { type: string } } }
- *           example: { categoryId: 66bca1f8d7432e0012345678, filters: { color: [black] } }
- *     responses:
- *       200: { description: Filter options returned. }
  * /products/{id}:
  *   get:
  *     tags: [Products]

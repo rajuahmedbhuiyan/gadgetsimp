@@ -44,4 +44,14 @@ async function remove(req, res) {
   return sendResponse(res, { message: "Category archived", data: { deleted } });
 }
 
-module.exports = { create, update, getById, configuration, list, filterGrouped, sort, remove };
+async function setShowInHome(req, res) {
+  const categories = await service.setShowInHome(req.validated.body, actor(req));
+
+  return sendResponse(res, {
+    message: `Home visibility updated for ${categories.length} categor${categories.length === 1 ? "y" : "ies"}`,
+    data: { categories },
+  });
+}
+
+module.exports = {
+  setShowInHome, create, update, getById, configuration, list, filterGrouped, sort, remove };

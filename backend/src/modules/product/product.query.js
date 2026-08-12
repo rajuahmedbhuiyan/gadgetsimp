@@ -6,7 +6,20 @@ const Variant = require("./variant.model");
 const { ATTRIBUTE_SOURCE, PRODUCT_STATUS, PRODUCT_VISIBILITY } = require("../../shared/constants");
 const { mapCatalogRecord } = require("../../shared/catalogSchemas");
 
-function publicMatch({ categoryIds, search }) {
+/**
+ * The gate every public catalog read passes through.
+ *
+ * `publishedAt: { $lte: now }` is what makes a product genuinely public:
+ * ACTIVE alone is not enough, because the field is stamped on the first
+ * transition to ACTIVE and a product must never appear before it.
+ *
+ * The static filters live here rather than in the dynamic attribute machinery
+ * because they are properties of the product document itself - indexable, and
+ * meaningful for every category - whereas attribute filters are category
+ * configuration that has to be resolved first. Price is the exception and is
+ * applied later; see `listCatalog`.
+ */
+function publicMatch({ categoryIds, search, featured, inStock, brandIds }) {
   const match = {
     status: { $in: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK] },
     visibility: PRODUCT_VISIBILITY.PUBLIC,
@@ -15,8 +28,96 @@ function publicMatch({ categoryIds, search }) {
   };
   if (categoryIds?.length) match.categoryIds = { $in: categoryIds.map((id) => new mongoose.Types.ObjectId(id)) };
   if (search) match.$text = { $search: search };
+  if (featured != null) match.featured = featured;
+  if (brandIds?.length) match.brandId = { $in: brandIds.map((id) => new mongoose.Types.ObjectId(id)) };
+
+  if (inStock === true) {
+    // Buyable means: not flagged out of stock, and either inventory is not
+    // tracked, or there is some, or backorders are accepted.
+    match.status = PRODUCT_STATUS.ACTIVE;
+    match.$or = [
+      { "stock.trackInventory": false },
+      { "stock.quantity": { $gt: 0 } },
+      { "stock.allowBackorder": true },
+    ];
+  }
+
+  if (inStock === false) {
+    match.$or = [
+      { status: PRODUCT_STATUS.OUT_OF_STOCK },
+      { "stock.trackInventory": true, "stock.quantity": { $lte: 0 }, "stock.allowBackorder": false },
+    ];
+  }
+
   return match;
 }
+
+/**
+ * The same gate for a variant: sellable states only, not soft-deleted.
+ *
+ * Extracted so the `$lookup` below and the cart - which has to decide whether
+ * a SKU someone chose last week is still buyable - read the rule from one
+ * place. A variant with no `publishedAt` of its own inherits its product's,
+ * which the caller is expected to have already checked.
+ */
+function variantPublicMatch() {
+  return {
+    status: { $in: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK] },
+    deletedAt: null,
+  };
+}
+
+/**
+ * The trimmed shape a storefront grid actually renders.
+ *
+ * A product document carries descriptions, attribute maps, galleries and SEO -
+ * none of which a card shows, and all of which travel over the wire and
+ * through JSON.parse on a phone. Projecting in the database keeps a 24-item
+ * page small.
+ */
+const CARD_PROJECTION = {
+  _id: 1,
+  name: 1,
+  slug: 1,
+  thumbnail: 1,
+  productType: 1,
+  featured: 1,
+  currency: 1,
+  sellingPrice: 1,
+  originalPrice: 1,
+  status: 1,
+  brandId: {
+    $let: {
+      vars: { brand: { $arrayElemAt: ["$_brand", 0] } },
+      in: { id: "$$brand._id", name: "$$brand.name", slug: "$$brand.slug" },
+    },
+  },
+  pricing: { min: "$effectiveMinPrice", max: "$effectiveMaxPrice", currency: "$currency" },
+  inStock: {
+    $and: [
+      { $ne: ["$status", PRODUCT_STATUS.OUT_OF_STOCK] },
+      {
+        $or: [
+          { $eq: ["$stock.trackInventory", false] },
+          { $gt: ["$stock.quantity", 0] },
+          { $eq: ["$stock.allowBackorder", true] },
+        ],
+      },
+    ],
+  },
+  discountPercent: {
+    $cond: [
+      { $and: [{ $gt: ["$originalPrice", 0] }, { $gt: ["$originalPrice", "$sellingPrice"] }] },
+      {
+        $round: [
+          { $multiply: [{ $divide: [{ $subtract: ["$originalPrice", "$sellingPrice"] }, "$originalPrice"] }, 100] },
+          0,
+        ],
+      },
+      0,
+    ],
+  },
+};
 
 function valueCondition(filter) {
   if (filter.range) {
@@ -52,8 +153,7 @@ function variantFilterMatch(filters) {
 function matchingVariantsLookup(filters, as = "_matchingVariants", { groupByPrice = false } = {}) {
   const match = {
     $expr: { $eq: ["$productId", "$$productId"] },
-    status: { $in: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK] },
-    deletedAt: null,
+    ...variantPublicMatch(),
     ...variantFilterMatch(filters),
   };
   const pipeline = [{ $match: match }];
@@ -100,9 +200,25 @@ function sortStage(sort, hasSearch) {
   return { createdAt: direction, _id: 1 };
 }
 
-async function listCatalog({ categoryIds, search, filters, sort, pagination }) {
+/**
+ * @param {object} params
+ * @param {"full"|"card"} [params.projection] `card` returns the lightweight
+ *   storefront shape; `full` the richer admin/detail one.
+ */
+async function listCatalog({
+  categoryIds,
+  search,
+  filters,
+  sort,
+  pagination,
+  featured,
+  inStock,
+  brandIds,
+  price,
+  projection = "full",
+}) {
   const { page, limit } = pagination;
-  const pipeline = [{ $match: publicMatch({ categoryIds, search }) }];
+  const pipeline = [{ $match: publicMatch({ categoryIds, search, featured, inStock, brandIds }) }];
   if (search) pipeline.push({ $addFields: { _searchScore: { $meta: "textScore" } } });
   pipeline.push(...applyFilters(filters));
   pipeline.push(matchingVariantsLookup([], "_priceStats", { groupByPrice: true }));
@@ -112,6 +228,16 @@ async function listCatalog({ categoryIds, search, filters, sort, pagination }) {
       effectiveMaxPrice: { $ifNull: ["$sellingPrice", { $arrayElemAt: ["$_priceStats.max", 0] }] },
     },
   });
+  // Price filters run here, not in `publicMatch`: a variable product has no
+  // single price of its own, so the value being filtered is the effective
+  // range just computed from its variants.
+  if (price && (price.min != null || price.max != null)) {
+    const condition = {};
+    if (price.min != null) condition.$gte = price.min;
+    if (price.max != null) condition.$lte = price.max;
+    pipeline.push({ $match: { effectiveMinPrice: condition } });
+  }
+
   pipeline.push({ $sort: sortStage(sort, Boolean(search)) });
   pipeline.push({
     $facet: {
@@ -121,7 +247,7 @@ async function listCatalog({ categoryIds, search, filters, sort, pagination }) {
         { $lookup: { from: "categories", localField: "categoryIds", foreignField: "_id", as: "_categories" } },
         { $lookup: { from: "brands", localField: "brandId", foreignField: "_id", as: "_brand" } },
         {
-          $project: {
+          $project: projection === "card" ? CARD_PROJECTION : {
             _id: 1,
             name: 1,
             slug: 1,
@@ -168,7 +294,12 @@ async function listCatalog({ categoryIds, search, filters, sort, pagination }) {
   return {
     items: (result?.items ?? []).map((record) => {
       const item = mapCatalogRecord(record);
-      item.categoryIds = (item.categoryIds ?? []).map((category) => ({ ...category, id: String(category.id) }));
+      // Only stringify what the projection actually returned - the card shape
+      // has no categories, and defaulting would add an empty array to every
+      // storefront row for nothing.
+      if (item.categoryIds) {
+        item.categoryIds = item.categoryIds.map((category) => ({ ...category, id: String(category.id) }));
+      }
       if (item.brandId?.id) item.brandId.id = String(item.brandId.id);
       return item;
     }),
@@ -205,8 +336,7 @@ function facetPipeline(attribute, allFilters) {
           {
             $match: {
               $expr: { $eq: ["$productId", "$$productId"] },
-              status: { $in: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK] },
-              deletedAt: null,
+              ...variantPublicMatch(),
               ...variantFilterMatch(otherVariantFilters),
             },
           },
@@ -242,4 +372,4 @@ async function catalogFacets({ categoryIds, search, filters, attributes }) {
   return result ?? {};
 }
 
-module.exports = { listCatalog, catalogFacets };
+module.exports = { listCatalog, catalogFacets, publicMatch, variantPublicMatch };

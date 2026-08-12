@@ -305,6 +305,89 @@ async function update(id, input, actor) {
   return getById(id, { publicOnly: false });
 }
 
+/**
+ * Applies a single-section patch.
+ *
+ * One entry point rather than seven near-identical functions, because every
+ * section shares the same three obligations and they are exactly the ones that
+ * get forgotten when the logic is copied:
+ *
+ *   1. **Cross-field rules run against the merged record, not the patch.**
+ *      Sending only `sellingPrice` still has to satisfy
+ *      `originalPrice >= sellingPrice`, and the other half of that comparison
+ *      is in the database. A patch validated in isolation would happily leave
+ *      a product priced above its own "was" price.
+ *   2. **Attributes are revalidated whenever either side moves.** Changing
+ *      categories can invalidate attributes that were fine a moment ago, and
+ *      changing attributes has to be checked against the categories already
+ *      stored.
+ *   3. **`publishedAt` stays derived.** It follows `status` here exactly as it
+ *      does on create and full update.
+ *
+ * @param {string} id
+ * @param {string} section  general | description | pricing | stock | attributes | media | seo
+ * @param {object} input    Already validated for that section.
+ */
+async function patchSection(id, section, input, actor) {
+  const current = await Product.findOne({ _id: id, deletedAt: null });
+  if (!current) throw ApiError.notFound("Product not found");
+
+  const patch = { ...input };
+
+  // `status` drives publishedAt wherever it can be set.
+  if ((section === "general" || section === "status") && "status" in input) {
+    patch.publishedAt =
+      input.status === PRODUCT_STATUS.DRAFT ? null : current.publishedAt ?? new Date();
+  }
+
+  if (section === "general") {
+    // Either side of the category/attribute relationship may be moving, so
+    // resolve both from the merged view before validating.
+    const categoryIds = input.categoryIds ?? current.categoryIds;
+    const context = await categoryContext(categoryIds);
+    const brandId = "brandId" in input ? input.brandId : current.brandId;
+
+    await validateBrand(brandId);
+    validateProductAttributes(context, Object.fromEntries(current.attributes ?? []), { brandId });
+  }
+
+  if (section === "pricing") {
+    const sellingPrice = input.sellingPrice ?? current.sellingPrice;
+    const originalPrice = "originalPrice" in input ? input.originalPrice : current.originalPrice;
+
+    // The check the schema cannot make: one-sided patches compare against what
+    // is already stored.
+    if (originalPrice != null && originalPrice < sellingPrice) {
+      throw ApiError.unprocessable("originalPrice must not be less than sellingPrice", {
+        code: "PRODUCT_PRICE_ORDER_INVALID",
+        errors: [
+          {
+            field: "originalPrice",
+            message: `originalPrice (${originalPrice}) is below sellingPrice (${sellingPrice})`,
+          },
+        ],
+      });
+    }
+  }
+
+  if (section === "attributes") {
+    const context = await categoryContext(current.categoryIds);
+    const attributes = input.attributes ?? Object.fromEntries(current.attributes ?? []);
+    validateProductAttributes(context, attributes, { brandId: current.brandId });
+  }
+
+  if (section === "seo") {
+    // Defaults are derived from the whole product, so merge before filling -
+    // otherwise a seo-only patch would derive a title from an undefined name.
+    patch.seo = withSeoDefaults({ ...current.toObject(), seo: input.seo }).seo;
+  }
+
+  Object.assign(current, patch, { updatedBy: actor.id });
+  await current.save();
+
+  return getById(id, { publicOnly: false });
+}
+
 async function getById(id, { publicOnly = true } = {}) {
   const filter = { _id: id, deletedAt: null };
   if (publicOnly) {
@@ -339,22 +422,33 @@ async function remove(id, actor) {
   return { id: String(removed._id) };
 }
 
+/**
+ * Expands one or more category ids into their full subtrees.
+ *
+ * Accepts a single id or a list, because the storefront filters by several
+ * categories at once while the admin listing filters by one. Roots are walked
+ * breadth-first and the result deduplicated - overlapping subtrees (a parent
+ * and its own child in the same request) would otherwise repeat ids and skew
+ * nothing, but bloat the `$in`.
+ */
 async function categoryScope(categoryId) {
-  if (!categoryId) return [];
+  const roots = [categoryId].flat().filter(Boolean).map(String);
+  if (roots.length === 0) return [];
   const categories = await Category.find({ deletedAt: null }).select({ _id: 1, parentId: 1 }).lean();
   const children = new Map();
   for (const category of categories) {
     const key = category.parentId == null ? null : String(category.parentId);
     children.set(key, [...(children.get(key) ?? []), String(category._id)]);
   }
-  const scope = [];
-  const queue = [String(categoryId)];
+  const scope = new Set();
+  const queue = [...roots];
   while (queue.length) {
     const id = queue.shift();
-    scope.push(id);
+    if (scope.has(id)) continue;
+    scope.add(id);
     queue.push(...(children.get(id) ?? []));
   }
-  return scope;
+  return [...scope];
 }
 
 async function filterMetadata(categoryIds) {
@@ -412,7 +506,7 @@ function normalizeFilters(requested, metadata) {
 }
 
 async function list(params) {
-  const categoryIds = await categoryScope(params.categoryId);
+  const categoryIds = await categoryScope(params.categoryIds ?? params.categoryId);
   const metadata = await filterMetadata(categoryIds);
   const normalized = normalizeFilters(params.filters, metadata);
   return query.listCatalog({ ...params, categoryIds, filters: normalized });
@@ -438,7 +532,7 @@ async function filters(params) {
       code: "CATEGORY_REQUIRED",
     });
   }
-  const categoryIds = await categoryScope(params.categoryId);
+  const categoryIds = await categoryScope(params.categoryIds ?? params.categoryId);
   const metadata = await filterMetadata(categoryIds);
   const normalized = normalizeFilters(params.filters, metadata);
   const facetResult = await query.catalogFacets({
@@ -484,4 +578,4 @@ async function filters(params) {
   return output;
 }
 
-module.exports = { create, update, getById, remove, list, filters };
+module.exports = { create, update, patchSection, getById, remove, list, filters };

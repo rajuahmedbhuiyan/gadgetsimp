@@ -97,6 +97,136 @@ const updateProduct = {
   }),
 };
 
+/**
+ * Section patches.
+ *
+ * The admin UI edits a product one panel at a time, and `PUT /products/{id}`
+ * requires the whole document - so saving a price change means round-tripping
+ * every field, and any field the form did not load is silently reset. These
+ * endpoints scope each save to the panel that produced it.
+ *
+ * Each schema is built from the same `shape` fragments as create/update, so a
+ * rule cannot drift between the two paths. Each is `.strict()` (an unknown key
+ * is a 422, not a silent no-op) and requires at least one field, because an
+ * empty patch is always a client bug.
+ *
+ * Cross-field rules that span sections - `originalPrice >= sellingPrice`, or
+ * attributes being valid for the category - cannot be checked here, because
+ * the other half of the comparison lives in the database. The service does
+ * those against the *merged* record.
+ */
+const atLeastOneField = (body) => Object.keys(body).length > 0;
+const notEmpty = { message: "Provide at least one field to update" };
+
+const patchGeneral = {
+  params: objectIdParam,
+  body: z
+    .object({
+      name: shape.name.optional(),
+      slug: shape.slug.optional(),
+      brandId: objectId.nullable().optional(),
+      categoryIds: shape.categoryIds.optional(),
+      sku: z.string().trim().min(1).max(120).optional(),
+      status: z.enum(PRODUCT_STATUS_VALUES).optional(),
+      visibility: z.enum(PRODUCT_VISIBILITY_VALUES).optional(),
+      featured: z.boolean().optional(),
+      /**
+       * `productType` is absent on purpose. Flipping VARIABLE to SIMPLE would
+       * orphan every generated SKU, and the reverse would leave a product
+       * marked variable with nothing to buy. That is a migration, not a field
+       * edit.
+       */
+    })
+    .strict()
+    .refine(atLeastOneField, notEmpty),
+};
+
+const patchDescription = {
+  params: objectIdParam,
+  body: z
+    .object({
+      description: shape.description.optional(),
+      // Nullable so a short description can be cleared, not only replaced.
+      shortDescription: z.string().trim().max(600).nullable().optional(),
+    })
+    .strict()
+    .refine(atLeastOneField, notEmpty),
+};
+
+const patchPricing = {
+  params: objectIdParam,
+  body: z
+    .object({
+      sellingPrice: z.coerce.number().min(0).optional(),
+      // Nullable so the struck-through "was" price can be removed.
+      originalPrice: z.coerce.number().min(0).nullable().optional(),
+      currency: z.literal("BDT").optional(),
+    })
+    .strict()
+    .refine(atLeastOneField, notEmpty)
+    // Only catches the case where both arrive together; one-sided patches are
+    // checked against the stored value in the service.
+    .refine(priceOrderIsValid, {
+      message: "originalPrice must not be less than sellingPrice",
+      path: ["originalPrice"],
+    }),
+};
+
+const patchStock = {
+  params: objectIdParam,
+  body: z.object({ stock }).strict(),
+};
+
+const patchAttributes = {
+  params: objectIdParam,
+  body: z
+    .object({
+      attributes: dynamicAttributes.optional(),
+      tags: z.array(z.string().trim().min(1).max(80)).max(100).optional(),
+    })
+    .strict()
+    .refine(atLeastOneField, notEmpty),
+};
+
+const patchMedia = {
+  params: objectIdParam,
+  body: z
+    .object({
+      thumbnail: image.optional(),
+      images: z.array(image).max(100).optional(),
+    })
+    .strict()
+    .refine(atLeastOneField, notEmpty),
+};
+
+/**
+ * Single-purpose toggles, separate from `/general`.
+ *
+ * A product table wants one-click "feature this" and "publish this" actions,
+ * and routing those through the general panel means the client has to know
+ * which other fields that panel owns. These carry exactly one decision each.
+ */
+const patchFeatured = {
+  params: objectIdParam,
+  body: z.object({ featured: z.boolean() }).strict(),
+};
+
+const patchStatus = {
+  params: objectIdParam,
+  body: z
+    .object({
+      status: z.enum(PRODUCT_STATUS_VALUES).optional(),
+      visibility: z.enum(PRODUCT_VISIBILITY_VALUES).optional(),
+    })
+    .strict()
+    .refine(atLeastOneField, notEmpty),
+};
+
+const patchSeo = {
+  params: objectIdParam,
+  body: z.object({ seo }).strict(),
+};
+
 const rangeFilter = z
   .object({ min: z.coerce.number().optional(), max: z.coerce.number().optional() })
   .strict()
@@ -120,14 +250,14 @@ const catalogQueryShape = {
         direction: z.enum(["asc", "desc"]).default("desc"),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     pagination: z
       .object({
         page: z.coerce.number().int().min(0).default(PAGINATION.DEFAULT_PAGE),
         limit: z.coerce.number().int().min(1).max(PAGINATION.MAX_LIMIT).default(24),
       })
       .strict()
-      .default({}),
+      .prefault({}),
   };
 
 const categoryRequiredForFilters = (body) => body.categoryId || Object.keys(body.filters).length === 0;
@@ -161,4 +291,13 @@ module.exports = {
   listProducts,
   productFilters,
   productById,
+  patchGeneral,
+  patchDescription,
+  patchPricing,
+  patchStock,
+  patchAttributes,
+  patchMedia,
+  patchSeo,
+  patchFeatured,
+  patchStatus,
 };

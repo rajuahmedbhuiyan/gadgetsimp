@@ -35,8 +35,13 @@ describe("OpenAPI spec", () => {
         "/media/{id}",
         "/products",
         "/products/filter",
-        "/products/filter-options",
         "/products/{id}",
+        "/shop",
+        "/shop/filter-options/{categorySlug}",
+        "/shop/{slug}",
+        "/cart",
+        "/cart/count",
+        "/cart/items",
         "/variations/generate",
         "/variations/filter",
         "/variations/{id}",
@@ -89,7 +94,9 @@ describe("OpenAPI spec", () => {
     expect(spec.paths["/auth/verify-email"].post.security).toEqual([]);
     expect(spec.paths["/auth/resend-verification"].post.security).toEqual([]);
     expect(spec.paths["/auth/social-login"].post.security).toEqual([]);
-    expect(spec.paths["/products/filter-options"].post.security).toEqual([]);
+    expect(spec.paths["/shop"].post.security).toEqual([]);
+    expect(spec.paths["/shop/filter-options/{categorySlug}"].get.security).toEqual([]);
+    expect(spec.paths["/shop/{slug}"].get.security).toEqual([]);
     expect(spec.paths["/products/filter"].post.security).toBeUndefined();
   });
 
@@ -97,7 +104,10 @@ describe("OpenAPI spec", () => {
     for (const [path, method] of [
       ["/products", "post"],
       ["/products/filter", "post"],
-      ["/products/filter-options", "post"],
+      ["/shop", "post"],
+      ["/cart/items", "post"],
+      ["/cart/items", "patch"],
+      ["/cart/items", "delete"],
       ["/products/{id}", "put"],
       ["/variations/generate", "post"],
       ["/variations/filter", "post"],
@@ -175,5 +185,119 @@ describe("health", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.database).toBe("connected");
+  });
+});
+
+describe("docs match the routes that actually exist", () => {
+  const spec = buildSpec();
+
+  /**
+   * `POST /products/filter-options` was documented - and documented as public -
+   * while having no route at all, so anyone following the docs got a 404.
+   *
+   * Rather than reconstruct paths from Express's router internals (whose layer
+   * regexps are an implementation detail), this calls each documented endpoint
+   * and asserts it is routed. Any status is acceptable except the router's own
+   * ROUTE_NOT_FOUND: a 401 or 422 still proves the endpoint exists.
+   */
+  const placeholder = { id: "6712f0c2a1b4d3e5f6a7b8c9", slug: "some-slug" };
+
+  const documented = Object.entries(spec.paths).flatMap(([path, item]) =>
+    Object.keys(item)
+      .filter((method) => method !== "parameters")
+      .map((method) => [method, path])
+  );
+
+  it.each(documented)("%s %s is routed", async (method, path) => {
+    const url = API + path.replace(/\{(\w+)\}/g, (_, name) => placeholder[name] ?? "1");
+
+    const response = await request(app)[method](url).send({});
+
+    expect({ method, path, code: response.body?.code }).not.toMatchObject({
+      code: "ROUTE_NOT_FOUND",
+    });
+  });
+});
+
+describe("swagger tags stay honest", () => {
+  const spec = buildSpec();
+
+  const usedTags = new Set(
+    Object.values(spec.paths).flatMap((item) =>
+      Object.entries(item)
+        .filter(([method]) => method !== "parameters")
+        .flatMap(([, operation]) => operation.tags ?? [])
+    )
+  );
+  const declaredTags = new Set(spec.tags.map((tag) => tag.name));
+
+  it("declares no tag without operations", () => {
+    // A declared-but-unused tag renders as an empty section in Swagger UI,
+    // which reads as a broken spec rather than a roadmap.
+    expect([...declaredTags].filter((tag) => !usedTags.has(tag))).toEqual([]);
+  });
+
+  it("uses no tag it has not declared", () => {
+    // An undeclared tag still groups operations, but with no description and
+    // in arbitrary order.
+    expect([...usedTags].filter((tag) => !declaredTags.has(tag))).toEqual([]);
+  });
+});
+
+describe("documented request bodies match the validators", () => {
+  const spec = buildSpec();
+
+  /**
+   * `showInHome` was accepted by `POST /categories` for a while without ever
+   * appearing in the docs - the third time a field was live but invisible.
+   * Hand-written YAML always drifts from the schema it describes; the only
+   * cure is something that compares the two.
+   *
+   * Zod is the source of truth: whatever the validator accepts is the
+   * contract, so every one of its keys must be documented.
+   */
+  const cases = [
+    ["/categories", "post", require("../src/modules/category/category.validation").createCategory],
+    ["/categories/{id}", "put", require("../src/modules/category/category.validation").updateCategory],
+    ["/brands", "post", require("../src/modules/brand/brand.validation").createBrand],
+    ["/attributes", "post", require("../src/modules/attribute/attribute.validation").createAttribute],
+    ["/products", "post", require("../src/modules/product/product.validation").createProduct],
+    ["/shop", "post", require("../src/modules/shop/shop.validation").shopFilter],
+    ["/shop/categories", "post", require("../src/modules/shop/shop.validation").shopCategories],
+    ["/cart/items", "post", require("../src/modules/cart/cart.validation").addItems],
+    ["/cart/items", "patch", require("../src/modules/cart/cart.validation").updateItems],
+    ["/cart/items", "delete", require("../src/modules/cart/cart.validation").removeItems],
+  ];
+
+  /** Zod v4 exposes the object's shape; unwrap any refine/default wrappers. */
+  function zodKeys(schema) {
+    let cursor = schema;
+    for (let depth = 0; depth < 10 && cursor; depth += 1) {
+      if (cursor.shape) return Object.keys(cursor.shape);
+      cursor = cursor._def?.innerType ?? cursor._def?.schema ?? cursor.def?.innerType ?? cursor.def?.schema;
+    }
+    return null;
+  }
+
+  /** Follow a $ref and flatten allOf, so composition does not hide fields. */
+  function documentedKeys(schema) {
+    if (!schema) return [];
+    if (schema.$ref) return documentedKeys(spec.components.schemas[schema.$ref.split("/").pop()]);
+    if (schema.allOf) return schema.allOf.flatMap(documentedKeys);
+    return Object.keys(schema.properties ?? {});
+  }
+
+  it.each(cases)("%s %s documents every field it accepts", (path, method, validation) => {
+    const accepted = zodKeys(validation.body);
+    expect(accepted).not.toBeNull(); // the unwrapper must keep working
+
+    const documented = new Set(
+      documentedKeys(spec.paths[path][method].requestBody?.content?.["application/json"]?.schema)
+    );
+
+    expect({ path, undocumented: accepted.filter((key) => !documented.has(key)) }).toEqual({
+      path,
+      undocumented: [],
+    });
   });
 });
