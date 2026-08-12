@@ -17,14 +17,17 @@ const logger = require("../../config/logger");
 const { sendMail } = require("../../config/mailer");
 const {
   verificationEmail,
+  checkoutAccountEmail,
   welcomeEmail,
   existingAccountEmail,
   passwordResetEmail,
   passwordChangedEmail,
 } = require("./auth.emails");
+const { claimGuestOrders } = require("../order/order.link");
 const {
   EMAIL_VERIFICATION_TTL_MINUTES,
   PASSWORD_RESET_TTL_MINUTES,
+  REGISTRATION_COMPLETION_TTL_MINUTES,
   AUTH_PROVIDERS,
   USER_STATUS,
 } = require("../../shared/constants");
@@ -138,6 +141,40 @@ async function verifyEmail(token, context = {}) {
     });
   }
 
+  /**
+   * The checkout branch: this signup never had a password field.
+   *
+   * A guest asked, mid-purchase, for an account to be created. Creating one
+   * here would mean an account with no credential the customer chose - so the
+   * address is marked proven, a fresh token is issued for the second step, and
+   * the caller is told a password is still needed.
+   *
+   * Crucially **no session is issued**. Signing someone in on the strength of
+   * a link that arrived by email, without them ever proving they know a
+   * secret, would make a forwarded or intercepted message a login. The
+   * password step is what turns a verified address into an account.
+   */
+  if (!pending.passwordHash) {
+    const { token: registrationToken, tokenHash: registrationTokenHash } = createSecureToken();
+
+    // Rotating the hash spends the emailed link: it cannot be replayed, and
+    // only the token handed back below opens the next step.
+    pending.tokenHash = registrationTokenHash;
+    pending.emailVerifiedAt = new Date();
+    pending.expiresAt = new Date(
+      Date.now() + REGISTRATION_COMPLETION_TTL_MINUTES * 60 * 1000
+    );
+    await pending.save();
+
+    return {
+      outcome: "REQUIRED_PASSWORD",
+      registrationToken,
+      email: pending.email,
+      firstName: pending.firstName,
+      lastName: pending.lastName,
+    };
+  }
+
   const user = await User.create({
     firstName: pending.firstName,
     lastName: pending.lastName,
@@ -153,13 +190,180 @@ async function verifyEmail(token, context = {}) {
   // replayed link fail with VERIFICATION_TOKEN_INVALID.
   await pending.deleteOne();
 
-  await sendMail({ to: user.email, ...welcomeEmail({ firstName: user.firstName }) }).catch(
-    (error) => logger.error({ err: error }, "Failed to send welcome email")
-  );
+  await afterAccountCreated(user);
 
   // Signing them in here is the point of verifying: the user clicked the link
   // seconds ago, so making them type the password again adds nothing.
+  return { outcome: "SESSION", ...(await issueSession(user, context)) };
+}
+
+/**
+ * Step 2 of the checkout signup: the password finally arrives.
+ *
+ * Reached only after `verifyEmail` has proven the address and handed back a
+ * `registrationToken`. The account is created here, and no second verification
+ * email is sent - the address was confirmed minutes ago and asking again would
+ * be theatre.
+ */
+async function completeRegistration({ token, password }, context = {}) {
+  const tokenHash = hashToken(token);
+
+  const pending = await PendingRegistration.findOne({ tokenHash });
+
+  if (!pending) {
+    throw ApiError.badRequest("This link is invalid or has already been used.", {
+      code: "REGISTRATION_TOKEN_INVALID",
+    });
+  }
+
+  /**
+   * The check that makes the two-step flow safe.
+   *
+   * Without it, the token from the *verification email* could be spent
+   * directly here - creating an account while skipping the verification step
+   * that token was issued to perform. Requiring the address to already be
+   * proven forces the intended order, and means this endpoint can only ever be
+   * reached with the rotated token that `verifyEmail` handed back.
+   */
+  if (!pending.emailVerifiedAt) {
+    throw ApiError.badRequest("Confirm your email address before choosing a password.", {
+      code: "EMAIL_NOT_VERIFIED",
+    });
+  }
+
+  // A normal signup already carries a password and becomes an account the
+  // moment its link is clicked, so it has no business here.
+  if (pending.passwordHash) {
+    throw ApiError.badRequest("This account already has a password. Please sign in.", {
+      code: "PASSWORD_ALREADY_SET",
+    });
+  }
+
+  if (pending.expiresAt.getTime() <= Date.now()) {
+    await pending.deleteOne();
+
+    throw ApiError.badRequest(
+      "This link has expired. Please use the forgot-password flow to set a password.",
+      { code: "REGISTRATION_TOKEN_EXPIRED" }
+    );
+  }
+
+  const alreadyExists = await User.exists({ email: pending.email });
+
+  if (alreadyExists) {
+    await pending.deleteOne();
+
+    throw ApiError.conflict("An account with this email already exists. Please sign in.", {
+      code: "EMAIL_ALREADY_REGISTERED",
+    });
+  }
+
+  const user = await User.create({
+    firstName: pending.firstName,
+    lastName: pending.lastName,
+    email: pending.email,
+    phone: pending.phone,
+    password,
+    // Carried over from the verification step rather than stamped now, so the
+    // record says when the address was actually proven.
+    emailVerifiedAt: pending.emailVerifiedAt,
+  });
+
+  await pending.deleteOne();
+
+  await afterAccountCreated(user);
+
   return issueSession(user, context);
+}
+
+/**
+ * Everything that happens once an account exists, whichever path created it.
+ *
+ * Both side effects are non-fatal on purpose: the account is already created,
+ * and failing the request now would tell the user their signup did not work
+ * when it did - leaving them retrying against an address that is already taken.
+ */
+async function afterAccountCreated(user) {
+  await claimGuestOrders(user.email, user._id).catch((error) =>
+    logger.error({ err: error, userId: user._id }, "Failed to claim guest orders")
+  );
+
+  await sendMail({ to: user.email, ...welcomeEmail({ firstName: user.firstName }) }).catch(
+    (error) => logger.error({ err: error }, "Failed to send welcome email")
+  );
+}
+
+/**
+ * Invites a guest who has just checked out to turn the purchase into an
+ * account.
+ *
+ * Records the signup without a password - see `pendingRegistration.model` -
+ * and emails a confirmation link. The order is already placed by the time this
+ * runs and does not depend on it, which is why every failure path here returns
+ * a reason instead of throwing: a mail outage must not undo a completed
+ * purchase.
+ *
+ * @returns {Promise<{invited: boolean, reason?: string}>}
+ */
+async function inviteAccountFromCheckout({ email, name, phone, orderNumber }) {
+  const existing = await User.exists({ email });
+
+  // Already has an account. Silently doing nothing is right: they can simply
+  // sign in, and sending a "you already have an account" note to an address
+  // supplied by whoever placed the order would let checkout be used to mail
+  // strangers.
+  if (existing) return { invited: false, reason: "ACCOUNT_EXISTS" };
+
+  const { firstName, lastName } = splitName(name);
+  const { token, tokenHash } = createSecureToken();
+
+  await PendingRegistration.findOneAndUpdate(
+    { email },
+    {
+      $set: {
+        email,
+        firstName,
+        lastName,
+        phone,
+        tokenHash,
+        expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MINUTES * 60 * 1000),
+        lastSentAt: new Date(),
+        resendCount: 0,
+        emailVerifiedAt: null,
+      },
+      // An earlier abandoned signup for this address may have left a password
+      // behind. Leaving it would send this row down the one-step path and
+      // create an account with a credential the customer no longer remembers
+      // choosing.
+      $unset: { passwordHash: "" },
+    },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+  );
+
+  await sendMail({
+    to: email,
+    ...checkoutAccountEmail({ firstName, orderNumber, token }),
+  });
+
+  return { invited: true };
+}
+
+/**
+ * Splits a single checkout name field into the two the user model requires.
+ *
+ * Checkout asks for one name because that is what a delivery label needs, and
+ * a mononym is perfectly normal in Bangladesh - so a single word gets a "-"
+ * placeholder rather than an invented surname or the first name repeated. It
+ * reads as obviously unset, which is what a placeholder should do, and the
+ * customer can correct it from their profile.
+ */
+function splitName(name) {
+  const parts = String(name ?? "").trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) return { firstName: "Customer", lastName: "-" };
+  if (parts.length === 1) return { firstName: parts[0], lastName: "-" };
+
+  return { firstName: parts.slice(0, -1).join(" "), lastName: parts.at(-1) };
 }
 
 /**
@@ -303,9 +507,10 @@ async function socialLogin(type, token, context = {}) {
   // A pending email signup for the same address is now redundant.
   await PendingRegistration.deleteOne({ email: profile.email });
 
-  await sendMail({ to: user.email, ...welcomeEmail({ firstName: user.firstName }) }).catch(
-    (error) => logger.error({ err: error }, "Failed to send welcome email")
-  );
+  // Same follow-up as any other new account, including claiming guest orders:
+  // the provider verified this address, which is the same bar the email flow
+  // clears before it claims anything.
+  await afterAccountCreated(user);
 
   return issueSession(user, context);
 }
@@ -613,6 +818,8 @@ async function burnTimingBudget() {
 module.exports = {
   register,
   verifyEmail,
+  completeRegistration,
+  inviteAccountFromCheckout,
   resendVerification,
   socialLogin,
   login,

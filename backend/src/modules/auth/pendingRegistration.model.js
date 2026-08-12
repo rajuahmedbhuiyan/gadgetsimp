@@ -35,8 +35,31 @@ const pendingRegistrationSchema = new mongoose.Schema(
     lastName: { type: String, required: true, trim: true, maxlength: 60 },
     phone: { type: String, trim: true, maxlength: 32 },
 
-    // bcrypt digest, hashed before the document is ever written.
-    passwordHash: { type: String, required: true },
+    /**
+     * bcrypt digest, hashed before the document is ever written.
+     *
+     * **Optional**, and its absence is meaningful: a row without one came from
+     * a guest checkout, where the customer asked for an account but was never
+     * shown a password field - they were buying something, not filling in a
+     * signup form. Those rows take the two-step path instead, verifying the
+     * address first and collecting a password afterwards.
+     *
+     * The service treats a missing hash as "ask for a password", never as
+     * "create an account with no credential".
+     */
+    passwordHash: { type: String },
+
+    /**
+     * When the address was proven, for the checkout path only.
+     *
+     * A normal signup never sets this - it becomes a real user the instant the
+     * link is clicked, so there is nothing to remember. A checkout signup
+     * lingers between "email confirmed" and "password chosen", and this is
+     * what separates the two: the completion endpoint refuses a row where it
+     * is null, so an emailed token cannot be spent directly on creating an
+     * account and skipping the verification it was meant to perform.
+     */
+    emailVerifiedAt: { type: Date, default: null },
 
     // Only the SHA-256 of the token is kept. The raw token exists solely in
     // the email, so a database dump cannot be used to verify someone else's

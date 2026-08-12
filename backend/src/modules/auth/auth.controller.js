@@ -59,17 +59,66 @@ async function register(req, res) {
 }
 
 /**
- * Consumes the emailed token, creates the account, and signs the user in.
+ * Consumes the emailed token. What happens next depends on how the signup
+ * started, and the client must be able to tell the two apart:
+ *
+ *   - **Normal signup** - the password was chosen up front, so the account is
+ *     created and a session issued. 201.
+ *   - **Guest checkout signup** - there never was a password field, so the
+ *     address is confirmed and nothing else. 200 with
+ *     `code: "REQUIRED_PASSWORD"` and a `registrationToken`; the frontend
+ *     collects a password and posts both to `/auth/complete-registration`.
+ *
+ * No session is issued in the second case, deliberately. A link that arrived
+ * by email is not proof of anything but access to the mailbox, and treating it
+ * as a login would make a forwarded message an account takeover.
  */
 async function verifyEmail(req, res) {
-  const { user, accessToken, refreshToken } = await authService.verifyEmail(
+  const result = await authService.verifyEmail(
     req.validated.body.token,
+    requestContext(req)
+  );
+
+  if (result.outcome === "REQUIRED_PASSWORD") {
+    return sendResponse(res, {
+      statusCode: 200,
+      code: "REQUIRED_PASSWORD",
+      message: "Email confirmed. Choose a password to finish creating your account.",
+      data: {
+        registrationToken: result.registrationToken,
+        email: result.email,
+        firstName: result.firstName,
+        lastName: result.lastName,
+      },
+    });
+  }
+
+  const { user, accessToken, refreshToken } = result;
+
+  return sendResponse(res, {
+    statusCode: 201,
+    message: "Email confirmed and account created",
+    data: issue(res, { user, accessToken, refreshToken }),
+  });
+}
+
+/**
+ * Finishes a guest-checkout signup by setting the password.
+ *
+ * No second verification email: the address was confirmed minutes ago by the
+ * call that issued this token, and asking again would be theatre. The session
+ * is issued here because this is the point the user proved knowledge of a
+ * secret they chose.
+ */
+async function completeRegistration(req, res) {
+  const { user, accessToken, refreshToken } = await authService.completeRegistration(
+    req.validated.body,
     requestContext(req)
   );
 
   return sendResponse(res, {
     statusCode: 201,
-    message: "Email confirmed and account created",
+    message: "Account created",
     data: issue(res, { user, accessToken, refreshToken }),
   });
 }
@@ -215,6 +264,7 @@ async function me(req, res) {
 module.exports = {
   register,
   verifyEmail,
+  completeRegistration,
   resendVerification,
   socialLogin,
   listProviders,

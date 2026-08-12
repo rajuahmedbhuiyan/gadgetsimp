@@ -36,6 +36,20 @@ router.post("/register", registerLimiter, validate(schemas.register), controller
 // unlimited attempts would let it be brute-forced.
 router.post("/verify-email", authLimiter, validate(schemas.verifyEmail), controller.verifyEmail);
 
+/**
+ * Step 3, for a signup that began at checkout: set the password.
+ *
+ * Auth tier, because the token it consumes is a credential that creates an
+ * account, and unlimited attempts would let it be brute-forced - the same
+ * reasoning as `verify-email` above.
+ */
+router.post(
+  "/complete-registration",
+  authLimiter,
+  validate(schemas.completeRegistration),
+  controller.completeRegistration
+);
+
 // Sends mail to an address the caller names, so it gets the strictest tier -
 // this is the endpoint someone would abuse to spam a third party's inbox.
 router.post(

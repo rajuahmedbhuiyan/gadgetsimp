@@ -273,6 +273,126 @@ const CART_ISSUE = Object.freeze({
 
 const CART_ISSUE_VALUES = Object.freeze(Object.values(CART_ISSUE));
 
+/* -------------------------------- Orders --------------------------------- */
+
+/**
+ * The order lifecycle.
+ *
+ * `CANCELED` is spelled with one L throughout - American spelling, matching
+ * the rest of the enums. Enum values reach client code, stored rows and
+ * support scripts, so the spelling is permanent either way and being
+ * consistent is what matters.
+ */
+const ORDER_STATUS = Object.freeze({
+  PENDING: "PENDING",
+  CONFIRMED: "CONFIRMED",
+  OUT_FOR_DELIVERY: "OUT_FOR_DELIVERY",
+  DELIVERED: "DELIVERED",
+  RETURNED: "RETURNED",
+  CANCELED: "CANCELED",
+});
+
+const ORDER_STATUS_VALUES = Object.freeze(Object.values(ORDER_STATUS));
+
+/**
+ * Outcomes that went wrong for the customer, and therefore demand a written
+ * reason on the record.
+ *
+ * The note is not paperwork: a return or a cancellation is the one thing
+ * anybody looks back at months later - during a refund dispute, a courier
+ * claim, or an argument about who cancelled - and "CANCELED" with no reason
+ * answers none of those questions.
+ */
+const ORDER_NEGATIVE_STATUSES = Object.freeze([
+  ORDER_STATUS.RETURNED,
+  ORDER_STATUS.CANCELED,
+]);
+
+/**
+ * Which transitions are legal, as an explicit map rather than a set of
+ * scattered `if` statements.
+ *
+ * Without this, any status could be set to any other, and an order could go
+ * from DELIVERED back to PENDING - which is not a workflow, it is a data
+ * corruption that only shows up in a report weeks later. `RETURNED` and
+ * `CANCELED` are terminal on purpose: an order that ended has ended, and
+ * re-opening it would silently re-reserve stock that was already released.
+ */
+const ORDER_STATUS_FLOW = Object.freeze({
+  [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELED],
+  [ORDER_STATUS.CONFIRMED]: [ORDER_STATUS.OUT_FOR_DELIVERY, ORDER_STATUS.CANCELED],
+  [ORDER_STATUS.OUT_FOR_DELIVERY]: [
+    ORDER_STATUS.DELIVERED,
+    ORDER_STATUS.RETURNED,
+    ORDER_STATUS.CANCELED,
+  ],
+  [ORDER_STATUS.DELIVERED]: [ORDER_STATUS.RETURNED],
+  [ORDER_STATUS.RETURNED]: [],
+  [ORDER_STATUS.CANCELED]: [],
+});
+
+/**
+ * Reaching one of these puts the reserved units back on the shelf. Kept
+ * alongside the flow so adding a status forces a decision about its stock
+ * consequence rather than defaulting to "keep it reserved forever".
+ */
+const ORDER_STOCK_RELEASING_STATUSES = ORDER_NEGATIVE_STATUSES;
+
+/**
+ * Payment methods. One for now, as an enum rather than a boolean because
+ * every real store grows a second one, and a `isCashOnDelivery` flag would
+ * have to be migrated the day that happens.
+ */
+const PAYMENT_METHOD = Object.freeze({
+  CASH_ON_DELIVERY: "CASH_ON_DELIVERY",
+});
+
+const PAYMENT_METHOD_VALUES = Object.freeze(Object.values(PAYMENT_METHOD));
+
+const PAYMENT_STATUS = Object.freeze({
+  DUE: "DUE",
+  PAID: "PAID",
+  REFUNDED: "REFUNDED",
+});
+
+const PAYMENT_STATUS_VALUES = Object.freeze(Object.values(PAYMENT_STATUS));
+
+/**
+ * Order limits and the customer-facing order number.
+ *
+ * The number is **random** within its range rather than sequential. A
+ * sequential one would be a public counter of how many orders the business
+ * has taken - visible to every customer and every competitor who places one
+ * order a week and watches it climb.
+ *
+ * Six digits is 900,000 possibilities, which is comfortable now and will not
+ * be forever: collisions are retried against the unique index, but once the
+ * store passes roughly 200,000 orders the retry loop starts doing real work
+ * and the range should widen. Because the number is guessable by design,
+ * nothing may be authorised by knowing it - orders are always fetched by
+ * owner or by staff role.
+ */
+const ORDER = Object.freeze({
+  MAX_ITEMS: 50,
+  MAX_QUANTITY_PER_ITEM: 100,
+  NUMBER_MIN: 100_000,
+  NUMBER_MAX: 999_999,
+  NUMBER_ATTEMPTS: 8,
+  MAX_NOTE_LENGTH: 1000,
+});
+
+/**
+ * How long someone has to choose a password after clicking the verification
+ * link that a checkout sent them.
+ *
+ * Longer than the 10-minute email window on purpose, and safe to be: the
+ * emailed link is the part that travels through an untrusted channel and is
+ * already spent by this point. What remains is a token held by whoever just
+ * clicked, and cutting them off mid-modal for typing slowly would strand a
+ * customer who has already paid for something.
+ */
+const REGISTRATION_COMPLETION_TTL_MINUTES = 30;
+
 const REFRESH_COOKIE_NAME = "gs_refresh_token";
 
 /**
@@ -332,6 +452,17 @@ module.exports = {
   CART,
   CART_ISSUE,
   CART_ISSUE_VALUES,
+  ORDER,
+  ORDER_STATUS,
+  ORDER_STATUS_VALUES,
+  ORDER_STATUS_FLOW,
+  ORDER_NEGATIVE_STATUSES,
+  ORDER_STOCK_RELEASING_STATUSES,
+  PAYMENT_METHOD,
+  PAYMENT_METHOD_VALUES,
+  PAYMENT_STATUS,
+  PAYMENT_STATUS_VALUES,
+  REGISTRATION_COMPLETION_TTL_MINUTES,
   REFRESH_COOKIE_NAME,
   EMAIL_VERIFICATION_TTL_MINUTES,
   PASSWORD_RESET_TTL_MINUTES,

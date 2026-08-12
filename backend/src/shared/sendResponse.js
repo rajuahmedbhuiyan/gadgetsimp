@@ -7,13 +7,27 @@
  * endpoint answers in the same envelope. The frontend then has a single
  * response type to model rather than one per endpoint.
  */
-function sendResponse(res, { statusCode = 200, message = "Success", data = null, meta } = {}) {
+function sendResponse(res, { statusCode = 200, message = "Success", data = null, meta, code } = {}) {
   // `statusCode` is echoed in the body as well as set on the response. It is
   // redundant over plain HTTP, but it survives the places the status line does
   // not: a logged payload, a webhook relay, a client whose HTTP wrapper only
   // hands back the parsed JSON. Errors carry the same field, so one shape
   // answers "what happened" without reaching for transport metadata.
   const body = { success: true, statusCode, message, data };
+
+  /**
+   * A machine-readable outcome, for the few successes that have more than one.
+   *
+   * The error envelope has always carried `code`; this mirrors it on the
+   * success side so a client reads the same field either way. Set only when a
+   * caller asks for it, because a code on every 200 would be noise - most
+   * endpoints have exactly one way of succeeding and the status says it.
+   *
+   * `POST /auth/verify-email` is the case that needs it: confirming an address
+   * either signs you in or asks for a password, and both are 200s that a
+   * client must tell apart before deciding what to render.
+   */
+  if (code !== undefined) body.code = code;
 
   if (meta !== undefined) body.meta = meta;
 

@@ -18,6 +18,7 @@ describe("OpenAPI spec", () => {
         "/health",
         "/auth/register",
         "/auth/verify-email",
+        "/auth/complete-registration",
         "/auth/resend-verification",
         "/auth/social-login",
         "/auth/providers",
@@ -42,6 +43,13 @@ describe("OpenAPI spec", () => {
         "/cart",
         "/cart/count",
         "/cart/items",
+        "/orders",
+        "/orders/filter",
+        "/orders/{id}",
+        "/admin/orders/filter",
+        "/admin/orders/{id}",
+        "/admin/orders/{id}/status",
+        "/admin/orders/{id}/permanent",
         "/variations/generate",
         "/variations/filter",
         "/variations/{id}",
@@ -108,6 +116,12 @@ describe("OpenAPI spec", () => {
       ["/cart/items", "post"],
       ["/cart/items", "patch"],
       ["/cart/items", "delete"],
+      ["/orders", "post"],
+      ["/orders/filter", "post"],
+      ["/admin/orders/filter", "post"],
+      ["/admin/orders/{id}", "patch"],
+      ["/admin/orders/{id}/status", "patch"],
+      ["/auth/complete-registration", "post"],
       ["/products/{id}", "put"],
       ["/variations/generate", "post"],
       ["/variations/filter", "post"],
@@ -125,7 +139,12 @@ describe("OpenAPI spec", () => {
       ["/attributes/{id}", "put"],
     ]) {
       const media = spec.paths[path][method].requestBody?.content?.["application/json"];
-      expect({ path, method, hasSchema: Boolean(media?.schema), hasExample: Boolean(media?.example) }).toEqual({
+      // Either form counts: `example` is the single sample, `examples` the
+      // named set Swagger UI shows in a dropdown. The second is strictly
+      // richer, so demanding the first would push docs the wrong way.
+      const hasExample = Boolean(media?.example) || Object.keys(media?.examples ?? {}).length > 0;
+
+      expect({ path, method, hasSchema: Boolean(media?.schema), hasExample }).toEqual({
         path,
         method,
         hasSchema: true,
@@ -267,6 +286,12 @@ describe("documented request bodies match the validators", () => {
     ["/cart/items", "post", require("../src/modules/cart/cart.validation").addItems],
     ["/cart/items", "patch", require("../src/modules/cart/cart.validation").updateItems],
     ["/cart/items", "delete", require("../src/modules/cart/cart.validation").removeItems],
+    ["/orders", "post", require("../src/modules/order/order.validation").placeOrder],
+    ["/orders/filter", "post", require("../src/modules/order/order.validation").myOrders],
+    ["/admin/orders/filter", "post", require("../src/modules/order/order.validation").filterOrders],
+    ["/admin/orders/{id}", "patch", require("../src/modules/order/order.validation").updateOrderDetails],
+    ["/admin/orders/{id}/status", "patch", require("../src/modules/order/order.validation").changeStatus],
+    ["/auth/complete-registration", "post", require("../src/modules/auth/auth.validation").completeRegistration],
   ];
 
   /** Zod v4 exposes the object's shape; unwrap any refine/default wrappers. */

@@ -84,6 +84,60 @@ function verificationEmail({ firstName, token }) {
   };
 }
 
+/**
+ * Sent when a guest checkout asked for an account to be created.
+ *
+ * Different from the normal verification email in the two ways that matter to
+ * the person reading it: their order is already placed and is not waiting on
+ * this, and there is a password step waiting on the other side of the link. Not
+ * saying the first would make a customer anxious that ignoring the email costs
+ * them their purchase; not saying the second makes the password modal look
+ * like an unexpected demand for a credential.
+ */
+function checkoutAccountEmail({ firstName, orderNumber, token }) {
+  const url = verificationUrl(token);
+  const validFor = formatDuration(EMAIL_VERIFICATION_TTL_MINUTES);
+
+  return {
+    subject: `Confirm your email to track order #${orderNumber}`,
+    text: [
+      `Hi ${firstName},`,
+      "",
+      `Thanks for your order - #${orderNumber} is confirmed and on its way, whatever you do next.`,
+      "",
+      "You asked us to set up an account so you can track it and check out faster next time.",
+      "Confirm your email address here, then choose a password:",
+      "",
+      url,
+      "",
+      `This link is valid for ${validFor}.`,
+      "",
+      "If you did not ask for an account, ignore this email - your order is unaffected.",
+      "",
+      "- The GadgetSimp team",
+    ].join("\n"),
+    html: layout({
+      preheader: `Order #${orderNumber} is confirmed. Confirm your email to set up your account.`,
+      heading: `Thanks, ${firstName}!`,
+      body: `
+        <p style="${p}">
+          Your order <strong style="color:#1a1a1a;">#${orderNumber}</strong> is confirmed
+          and on its way - nothing below is needed for that.
+        </p>
+        <p style="${p}">
+          You asked us to set up an account so you can track this order and check
+          out faster next time. Confirm your email, then pick a password.
+        </p>
+        ${button({ url, label: "Confirm email address" })}
+        <p style="${pMuted}">This link is valid for ${validFor}.</p>
+        ${fallbackLink(url)}
+      `,
+      footerNote:
+        "If you did not ask for an account, you can ignore this email - your order is unaffected.",
+    }),
+  };
+}
+
 function welcomeEmail({ firstName }) {
   return {
     subject: "Your GadgetSimp account is ready",
@@ -232,6 +286,7 @@ function passwordChangedEmail({ firstName }) {
 
 module.exports = {
   verificationEmail,
+  checkoutAccountEmail,
   welcomeEmail,
   existingAccountEmail,
   passwordResetEmail,

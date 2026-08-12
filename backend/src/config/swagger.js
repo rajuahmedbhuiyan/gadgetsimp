@@ -56,6 +56,8 @@ const definition = {
     { name: "Products", description: "Product management for moderators, admins and owners" },
     { name: "Shop", description: "Public storefront: browsing, filtering and product pages" },
     { name: "Cart", description: "The signed-in shopper's basket: batch add, update, remove and clear" },
+    { name: "Orders", description: "Checkout and a customer's own order history" },
+    { name: "Orders Admin", description: "Staff order queue: status workflow, corrections and removal" },
     { name: "Categories", description: "Hierarchical catalog taxonomy and attribute configuration" },
     { name: "Brands", description: "Global product brands" },
     { name: "Attributes", description: "Reusable metadata-driven catalog attributes" },

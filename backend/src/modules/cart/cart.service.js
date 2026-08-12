@@ -2,11 +2,15 @@
 
 const mongoose = require("mongoose");
 const Cart = require("./cart.model");
-const Product = require("../product/product.model");
-const Variant = require("../product/variant.model");
 const ApiError = require("../../shared/ApiError");
-const { publicMatch, variantPublicMatch } = require("../product/product.query");
-const { CART, CART_ISSUE, PRODUCT_STATUS, PRODUCT_TYPE } = require("../../shared/constants");
+const {
+  availableUnits,
+  loadSelections,
+  checkSelection,
+  variantLabel,
+  optionsObject,
+} = require("../product/purchasable");
+const { CART, CART_ISSUE, PRODUCT_STATUS } = require("../../shared/constants");
 
 /**
  * The cart.
@@ -33,20 +37,6 @@ const { CART, CART_ISSUE, PRODUCT_STATUS, PRODUCT_TYPE } = require("../../shared
 
 /* ------------------------------ stock rules ------------------------------ */
 
-/**
- * How many units may still be taken, or `null` for "no ceiling".
- *
- * Null rather than Infinity because it survives JSON, and the two unlimited
- * cases are genuinely unlimited: a product that does not track inventory has
- * no number to run out of, and one that accepts backorders has decided that
- * running out is not a reason to stop selling.
- */
-function availableUnits(stock) {
-  if (!stock?.trackInventory) return null;
-  if (stock.allowBackorder) return null;
-  return Math.max(0, stock.quantity ?? 0);
-}
-
 function ceilingFor(available) {
   return Math.min(CART.MAX_QUANTITY_PER_LINE, available ?? Number.POSITIVE_INFINITY);
 }
@@ -67,85 +57,16 @@ function money(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-/* --------------------------- catalog resolution --------------------------- */
-
-const PRODUCT_FIELDS = {
-  name: 1,
-  slug: 1,
-  thumbnail: 1,
-  productType: 1,
-  currency: 1,
-  sellingPrice: 1,
-  originalPrice: 1,
-  stock: 1,
-  status: 1,
-};
-
-const VARIANT_FIELDS = {
-  productId: 1,
-  sku: 1,
-  options: 1,
-  sellingPrice: 1,
-  originalPrice: 1,
-  stock: 1,
-  status: 1,
-  image: 1,
-};
-
-/**
- * Loads everything a set of lines refers to.
- *
- * Each entity is fetched twice, and deliberately: once unfiltered for its
- * display fields, and once through the shared visibility gate to learn whether
- * it is still public. That is what lets an unavailable line still render its
- * own name - "Nike T-Shirt is no longer available" instead of "item
- * unavailable" - while keeping exactly one definition of "publicly visible",
- * imported from the catalog rather than restated here. Both queries are
- * `_id: {$in}` against the primary key.
- */
-async function loadCatalog(lines) {
-  const productIds = [...new Set(lines.map((line) => String(line.productId)))];
-  const variantIds = [
-    ...new Set(lines.filter((line) => line.variantId).map((line) => String(line.variantId))),
-  ];
-
-  const [products, visibleProductIds, variants, visibleVariantIds] = await Promise.all([
-    Product.find({ _id: { $in: productIds } }).select(PRODUCT_FIELDS).lean(),
-    Product.distinct("_id", { _id: { $in: productIds }, ...publicMatch({}) }),
-    variantIds.length
-      ? Variant.find({ _id: { $in: variantIds } }).select(VARIANT_FIELDS).lean()
-      : [],
-    variantIds.length
-      ? Variant.distinct("_id", { _id: { $in: variantIds }, ...variantPublicMatch() })
-      : [],
-  ]);
-
-  return {
-    products: new Map(products.map((product) => [String(product._id), product])),
-    visibleProducts: new Set(visibleProductIds.map(String)),
-    variants: new Map(variants.map((variant) => [String(variant._id), variant])),
-    visibleVariants: new Set(visibleVariantIds.map(String)),
-  };
-}
-
 /* ------------------------------ presentation ------------------------------ */
 
 function issue(code, message) {
   return { code, message };
 }
 
-function variantLabel(options) {
-  if (!options) return null;
-  const entries = options instanceof Map ? [...options.entries()] : Object.entries(options);
-  // "Black / M" - what the row shows under the product name.
-  return entries.map(([, value]) => String(value)).join(" / ") || null;
-}
-
 function presentVariant(variant) {
   if (!variant) return null;
 
-  const options =
-    variant.options instanceof Map ? Object.fromEntries(variant.options) : variant.options ?? {};
+  const options = optionsObject(variant);
 
   return {
     id: String(variant._id),
@@ -339,7 +260,7 @@ async function presentCart(cartDoc) {
     return { items: [], summary: emptySummary(), updatedAt: cartDoc?.updatedAt ?? null };
   }
 
-  const catalog = await loadCatalog(items);
+  const catalog = await loadSelections(items);
   const lines = items.map((item) => presentLine(item, catalog));
 
   return { items: lines, summary: summarise(lines), updatedAt: cartDoc?.updatedAt ?? null };
@@ -440,120 +361,6 @@ function groupRequested(items) {
   return [...byKey.values()];
 }
 
-/**
- * Decides whether one requested line may enter the cart at all.
- *
- * The variant rules are the substance here. A VARIABLE product is not itself
- * purchasable - it is a family of SKUs, and adding one without saying which
- * would leave the warehouse guessing which colour to pack - so a variant is
- * required. A SIMPLE product has none, and being handed one means the client
- * is confused about which product it is looking at, which is worth saying out
- * loud rather than ignoring.
- *
- * @returns {{error?: {field: string, code: string, message: string}}} on
- *   rejection, otherwise the resolved product, variant and stock ceiling.
- */
-function checkRequested(entry, catalog) {
-  const productId = String(entry.productId);
-  const product = catalog.products.get(productId);
-
-  // Unknown and not-visible are answered identically, so a draft product's
-  // existence cannot be probed through the cart.
-  if (!product || !catalog.visibleProducts.has(productId)) {
-    return {
-      error: {
-        field: "productId",
-        code: CART_ISSUE.PRODUCT_UNAVAILABLE,
-        message: "This product is not available.",
-      },
-    };
-  }
-
-  if (product.status !== PRODUCT_STATUS.ACTIVE) {
-    return {
-      error: {
-        field: "productId",
-        code: CART_ISSUE.OUT_OF_STOCK,
-        message: `${product.name} is out of stock.`,
-      },
-    };
-  }
-
-  if (product.productType === PRODUCT_TYPE.VARIABLE && !entry.variantId) {
-    return {
-      error: {
-        field: "variantId",
-        code: "VARIANT_REQUIRED",
-        message: `${product.name} has options - choose one before adding it.`,
-      },
-    };
-  }
-
-  if (product.productType === PRODUCT_TYPE.SIMPLE && entry.variantId) {
-    return {
-      error: {
-        field: "variantId",
-        code: "VARIANT_NOT_ALLOWED",
-        message: `${product.name} has no options, so no variant may be selected.`,
-      },
-    };
-  }
-
-  let variant = null;
-
-  if (entry.variantId) {
-    const variantId = String(entry.variantId);
-    variant = catalog.variants.get(variantId);
-
-    if (!variant || !catalog.visibleVariants.has(variantId)) {
-      return {
-        error: {
-          field: "variantId",
-          code: CART_ISSUE.VARIANT_UNAVAILABLE,
-          message: "The option you chose is not available.",
-        },
-      };
-    }
-
-    // A variant id belonging to a different product would otherwise price and
-    // stock this line from something the shopper never looked at.
-    if (String(variant.productId) !== productId) {
-      return {
-        error: {
-          field: "variantId",
-          code: "VARIANT_PRODUCT_MISMATCH",
-          message: "That option belongs to a different product.",
-        },
-      };
-    }
-
-    if (variant.status !== PRODUCT_STATUS.ACTIVE) {
-      return {
-        error: {
-          field: "variantId",
-          code: CART_ISSUE.OUT_OF_STOCK,
-          message: "The option you chose is out of stock.",
-        },
-      };
-    }
-  }
-
-  const source = variant ?? product;
-  const available = availableUnits(source.stock);
-
-  if (available === 0) {
-    return {
-      error: {
-        field: "productId",
-        code: CART_ISSUE.OUT_OF_STOCK,
-        message: `${product.name} is out of stock.`,
-      },
-    };
-  }
-
-  return { product, variant, available, unitPrice: source.sellingPrice };
-}
-
 function adjustment(entry, requested, applied, reason) {
   return {
     productId: String(entry.productId),
@@ -586,13 +393,13 @@ async function getCart(userId) {
  */
 async function addItems(userId, input) {
   const grouped = groupRequested(input.items);
-  const catalog = await loadCatalog(grouped);
+  const catalog = await loadSelections(grouped);
 
   const errors = [];
   const resolved = [];
 
   for (const entry of grouped) {
-    const outcome = checkRequested(entry, catalog);
+    const outcome = checkSelection(entry, catalog);
 
     if (outcome.error) {
       errors.push({
@@ -697,7 +504,7 @@ async function updateItems(userId, input) {
       .filter((item) => item.quantity > 0)
       .map((item) => byId.get(item.itemId));
 
-    const catalog = await loadCatalog(targets);
+    const catalog = await loadSelections(targets);
     const adjustments = [];
     const removals = new Set();
 

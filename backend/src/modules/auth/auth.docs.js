@@ -72,17 +72,36 @@
  * /auth/verify-email:
  *   post:
  *     tags: [Auth]
- *     summary: Step 2 of signup - confirm the email and create the account
+ *     summary: Step 2 of signup - confirm the email
  *     description: >
- *       Consumes the token from the emailed link, creates the account and
- *       signs the user straight in - they clicked the link seconds ago, so
- *       asking for the password again would add nothing.
+ *       Consumes the token from the emailed link. **What happens next depends
+ *       on how the signup started, and a client must handle both.**
  *
  *
- *       The token is single use. Replaying a link that has already been used
- *       returns `400 VERIFICATION_TOKEN_INVALID`, because the pending record
- *       is deleted on success. Only a SHA-256 hash of the token is stored, so
- *       a database dump cannot be used to confirm someone else's address.
+ *       **Normal signup** (the password was chosen up front): the account is
+ *       created and the user is signed straight in - they clicked the link
+ *       seconds ago, so asking for the password again would add nothing.
+ *       Answers **201** with the usual auth payload.
+ *
+ *
+ *       **Guest-checkout signup** (`createAccount: true` on `POST /orders`,
+ *       where there never was a password field): the address is confirmed and
+ *       nothing else. Answers **200** with **`code: "REQUIRED_PASSWORD"`** and
+ *       a `registrationToken`, and deliberately **no session** - a link that
+ *       arrived by email proves only mailbox access, and treating it as a login
+ *       would make a forwarded message an account takeover. Collect a password
+ *       and post it with that token to `POST /auth/complete-registration`.
+ *
+ *
+ *       Branch on the top-level `code`, not on the status: it is the field that
+ *       says which of the two happened.
+ *
+ *
+ *       The token is single use in both cases. Replaying a link that has
+ *       already been used returns `400 VERIFICATION_TOKEN_INVALID`, because the
+ *       pending record is either deleted or its token rotated. Only a SHA-256
+ *       hash of the token is stored, so a database dump cannot be used to
+ *       confirm someone else's address.
  *     security: []
  *     requestBody:
  *       required: true
@@ -111,6 +130,40 @@
  *                 - type: object
  *                   properties:
  *                     data: { $ref: '#/components/schemas/AuthPayload' }
+ *       200:
+ *         description: >
+ *           Guest-checkout signup: the email is confirmed but a password is
+ *           still needed. Carries `code: "REQUIRED_PASSWORD"` and **no
+ *           session**. Open a password modal and post to
+ *           `/auth/complete-registration` with the `registrationToken`.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     code: { type: string, enum: [REQUIRED_PASSWORD], example: REQUIRED_PASSWORD }
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         registrationToken:
+ *                           type: string
+ *                           description: Post this back with the chosen password. Valid for 30 minutes.
+ *                           example: 4bR7tY2wQ9zX1cV3bN5mK8jH0gF6dS4aP2oI7uY5tR3
+ *                         email: { type: string, example: rahim@example.com }
+ *                         firstName: { type: string, example: Rahim }
+ *                         lastName: { type: string, example: Uddin }
+ *             example:
+ *               success: true
+ *               statusCode: 200
+ *               message: Email confirmed. Choose a password to finish creating your account.
+ *               code: REQUIRED_PASSWORD
+ *               data:
+ *                 registrationToken: 4bR7tY2wQ9zX1cV3bN5mK8jH0gF6dS4aP2oI7uY5tR3
+ *                 email: rahim@example.com
+ *                 firstName: Rahim
+ *                 lastName: Uddin
  *       400:
  *         description: Token invalid, already used, or expired.
  *         content:
@@ -123,6 +176,81 @@
  *               code: VERIFICATION_TOKEN_INVALID
  *               errors: []
  *       409: { $ref: '#/components/responses/Conflict' }
+ *       429: { $ref: '#/components/responses/TooManyRequests' }
+ *
+ * /auth/complete-registration:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Step 3 - set a password for a guest-checkout signup
+ *     description: >
+ *       Finishes the account that `POST /orders` offered to create. Takes the
+ *       `registrationToken` returned by `/auth/verify-email` alongside
+ *       `code: "REQUIRED_PASSWORD"`, plus the password the customer just chose.
+ *
+ *
+ *       **No second verification email.** The address was confirmed minutes ago
+ *       by the call that issued this token; asking again would be theatre. The
+ *       session is issued here, because this is the point the user proved
+ *       knowledge of a secret they chose - not merely access to a mailbox.
+ *
+ *
+ *       Creating the account also **attaches the guest orders placed with that
+ *       address** to it, which is what makes the purchase that prompted the
+ *       signup appear in their order history rather than an empty list.
+ *
+ *
+ *       The token from the verification email itself will not work here: the
+ *       address has to be proven first, and `verify-email` rotates the token
+ *       when it does. That ordering is what stops the emailed link being spent
+ *       directly on account creation, skipping the verification it exists to
+ *       perform.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, password]
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: The `registrationToken` from `/auth/verify-email`. Valid for 30 minutes.
+ *                 example: 4bR7tY2wQ9zX1cV3bN5mK8jH0gF6dS4aP2oI7uY5tR3
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *                 description: At least 8 characters with an uppercase letter, a lowercase letter and a digit.
+ *                 example: Str0ngPass
+ *           example:
+ *             token: 4bR7tY2wQ9zX1cV3bN5mK8jH0gF6dS4aP2oI7uY5tR3
+ *             password: Str0ngPass
+ *     responses:
+ *       201:
+ *         description: Account created and signed in. Refresh token set as an httpOnly cookie.
+ *         headers:
+ *           Set-Cookie:
+ *             schema: { type: string }
+ *             description: 'gs_refresh_token=<jwt>; HttpOnly; SameSite=Lax; Path=/api/v1/auth'
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data: { $ref: '#/components/schemas/AuthPayload' }
+ *       400:
+ *         description: >
+ *           Token invalid or expired (`REGISTRATION_TOKEN_INVALID`,
+ *           `REGISTRATION_TOKEN_EXPIRED`), the address was never confirmed
+ *           (`EMAIL_NOT_VERIFIED`), or this signup already has a password
+ *           (`PASSWORD_ALREADY_SET`).
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409: { $ref: '#/components/responses/Conflict' }
+ *       422: { $ref: '#/components/responses/ValidationError' }
  *       429: { $ref: '#/components/responses/TooManyRequests' }
  *
  * /auth/resend-verification:

@@ -59,6 +59,22 @@ const verifyEmail = {
     .strict(),
 };
 
+/**
+ * Step 2 of a guest-checkout signup.
+ *
+ * The token is the rotated one `verify-email` handed back, not the one from
+ * the email - see `auth.service.completeRegistration` for why the distinction
+ * is load-bearing.
+ */
+const completeRegistration = {
+  body: z
+    .object({
+      token: z.string().trim().min(20, "Invalid registration token").max(256),
+      password: passwordSchema,
+    })
+    .strict(),
+};
+
 const resendVerification = {
   body: z.object({ email: emailSchema }).strict(),
 };
@@ -120,6 +136,7 @@ const changePassword = {
 module.exports = {
   register,
   verifyEmail,
+  completeRegistration,
   resendVerification,
   socialLogin,
   login,

@@ -11,6 +11,8 @@ const brandRoutes = require("../modules/brand/brand.routes");
 const productRoutes = require("../modules/product/product.routes");
 const shopRoutes = require("../modules/shop/shop.routes");
 const cartRoutes = require("../modules/cart/cart.routes");
+const orderRoutes = require("../modules/order/order.routes");
+const orderAdminRoutes = require("../modules/order/order.admin.routes");
 const productPublicRoutes = require("../modules/product-public/product-public.routes");
 const variationRoutes = require("../modules/variation/variation.routes");
 const { sendResponse } = require("../shared/sendResponse");
@@ -35,6 +37,11 @@ const modules = [
   { path: "/products", router: productRoutes },
   { path: "/shop", router: shopRoutes },
   { path: "/cart", router: cartRoutes },
+  { path: "/orders", router: orderRoutes },
+  // Staff order management, on its own prefix rather than nested under
+  // `/orders`, so the customer routes and the ones that reach every order in
+  // the system cannot be confused for each other at a glance.
+  { path: "/admin/orders", router: orderAdminRoutes },
   { path: "/variations", router: variationRoutes },
 ];
 
