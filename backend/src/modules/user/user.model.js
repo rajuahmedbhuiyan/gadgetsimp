@@ -9,6 +9,9 @@ const {
   AUTH_PROVIDERS,
   AUTH_PROVIDER_VALUES,
   SOCIAL_PROVIDERS,
+  USER_STATUS,
+  USER_STATUS_VALUES,
+  SIGN_IN_ALLOWED_STATUSES,
 } = require("../../shared/constants");
 const { nextSequence } = require("../../shared/sequence");
 
@@ -124,13 +127,31 @@ const userSchema = new mongoose.Schema(
     },
 
     phone: { type: String, trim: true, maxlength: 32 },
-    avatarUrl: { type: String, trim: true, maxlength: 512 },
+    image: { type: String, trim: true, maxlength: 512 },
 
-    isActive: { type: Boolean, default: true },
+    status: {
+      type: String,
+      enum: USER_STATUS_VALUES,
+      default: USER_STATUS.ACTIVE,
+      index: true,
+    },
+
+    // Set by the soft delete, cleared if the account is restored. Kept
+    // separate from `status` so "when was this removed" survives a later
+    // status change, which matters for support and audit.
+    deletedAt: { type: Date, default: null },
 
     // Always set on creation: an account only exists once its email has been
     // verified, so there is no unverified-user state to represent.
     emailVerifiedAt: { type: Date, default: null },
+
+    /**
+     * Password reset. Only the SHA-256 of the token is stored - the raw value
+     * exists solely in the email - so a database dump cannot be used to seize
+     * accounts. Same reasoning as refresh tokens and verification tokens.
+     */
+    passwordResetTokenHash: { type: String, select: false },
+    passwordResetExpiresAt: { type: Date, select: false },
 
     // Bumping this invalidates every access token already issued to the user.
     tokenVersion: { type: Number, default: 0, select: false },
@@ -153,6 +174,8 @@ const userSchema = new mongoose.Schema(
         delete ret.sessions;
         delete ret.tokenVersion;
         delete ret.passwordChangedAt;
+        delete ret.passwordResetTokenHash;
+        delete ret.passwordResetExpiresAt;
         // Provider ids are internal join keys; the client only needs to know
         // *which* providers are linked, which `authProviders` already says.
         delete ret.socialAccounts;
@@ -238,6 +261,29 @@ userSchema.methods.comparePassword = async function comparePassword(candidate) {
 
 userSchema.methods.hasProvider = function hasProvider(provider) {
   return this.authProviders?.includes(provider) ?? false;
+};
+
+/**
+ * Whether this account may hold a session. Everything that used to ask
+ * `isActive` asks this instead, so the rule lives in one place rather than
+ * being re-derived - slightly differently - at each call site.
+ */
+userSchema.methods.canSignIn = function canSignIn() {
+  return SIGN_IN_ALLOWED_STATUSES.includes(this.status);
+};
+
+userSchema.virtual("isDeleted").get(function isDeleted() {
+  return this.status === USER_STATUS.DELETED;
+});
+
+/**
+ * Ends every session and invalidates every outstanding access token. Used
+ * wherever a credential changes - password reset, password change, admin
+ * deactivation - because that is precisely when other devices must stop.
+ */
+userSchema.methods.revokeAllSessions = function revokeAllSessions() {
+  this.tokenVersion += 1;
+  this.sessions = [];
 };
 
 /**

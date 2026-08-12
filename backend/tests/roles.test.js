@@ -4,7 +4,12 @@ const request = require("supertest");
 const createApp = require("../src/app");
 const User = require("../src/modules/user/user.model");
 const { API, createUserAndLogin } = require("./helpers");
-const { ROLES, roleAtLeast, assignableRoles } = require("../src/shared/constants");
+const {
+  ROLES,
+  roleAtLeast,
+  assignableRoles,
+  USER_STATUS,
+} = require("../src/shared/constants");
 
 const app = createApp();
 
@@ -32,16 +37,17 @@ describe("role hierarchy", () => {
 });
 
 describe("authorize() admits seniors", () => {
-  // GET /users requires ROLE_MODERATOR; everyone above must pass it too.
+  // POST /users (the filter endpoint) requires ROLE_ADMIN, so an owner passes
+  // it without being named, and a moderator does not.
   it.each([
-    [ROLES.MODERATOR, 200],
     [ROLES.ADMIN, 200],
     [ROLES.OWNER, 200],
+    [ROLES.MODERATOR, 403],
     [ROLES.CUSTOMER, 403],
   ])("%s -> %i on the user list", async (role, expected) => {
     const { authHeader } = await createUserAndLogin(app, { role });
 
-    const response = await request(app).get(`${API}/users`).set("Authorization", authHeader);
+    const response = await request(app).post(`${API}/users/filter`).set("Authorization", authHeader).send({});
 
     expect(response.status).toBe(expected);
   });
@@ -180,7 +186,7 @@ describe("PATCH /users/:id/status", () => {
     const response = await request(app)
       .patch(`${API}/users/${target.id}/status`)
       .set("Authorization", authHeader)
-      .send({ isActive: false });
+      .send({ status: USER_STATUS.SUSPENDED });
 
     expect(response.status).toBe(200);
 
@@ -195,7 +201,7 @@ describe("PATCH /users/:id/status", () => {
     const response = await request(app)
       .patch(`${API}/users/${peer.id}/status`)
       .set("Authorization", authHeader)
-      .send({ isActive: false });
+      .send({ status: USER_STATUS.SUSPENDED });
 
     expect(response.status).toBe(403);
   });

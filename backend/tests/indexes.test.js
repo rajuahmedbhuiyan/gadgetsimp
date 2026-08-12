@@ -37,7 +37,7 @@ describe("database indexes", () => {
   });
 
   it("builds more than the default _id index on every collection", async () => {
-    for (const modelName of ["User", "Category", "Product"]) {
+    for (const modelName of ["User", "PendingRegistration"]) {
       const names = await indexNames(modelName);
       expect(names.length).toBeGreaterThan(1);
     }
@@ -50,31 +50,9 @@ describe("database indexes", () => {
     expect(index.unique).toBe(true);
   });
 
-  it("enforces unique slugs on categories and products", async () => {
-    expect((await indexByKey("Category", { slug: 1 })).unique).toBe(true);
-    expect((await indexByKey("Product", { slug: 1 })).unique).toBe(true);
-  });
 
-  it("builds the weighted product text index that search depends on", async () => {
-    const names = await indexNames("Product");
 
-    expect(names).toContain("product_text_search");
-  });
 
-  it("builds the compound index backing category browsing", async () => {
-    // Equality fields first, then the sort field - the order the default
-    // catalog listing query actually needs.
-    const index = await indexByKey("Product", { category: 1, status: 1, createdAt: -1 });
-
-    expect(index).toBeDefined();
-  });
-
-  it("keeps sibling category names unique", async () => {
-    const index = await indexByKey("Category", { parent: 1, name: 1 });
-
-    expect(index).toBeDefined();
-    expect(index.unique).toBe(true);
-  });
 });
 
 describe("unique constraints are actually enforced", () => {

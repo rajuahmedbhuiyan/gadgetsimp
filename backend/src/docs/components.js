@@ -75,6 +75,18 @@
  *         `ROLE_OWNER`. Nobody may assign a role at or above their own rank.
  *       example: ROLE_CUSTOMER
  *
+ *     UserStatus:
+ *       type: string
+ *       enum: [ACTIVE, SUSPENDED, DELETED]
+ *       default: ACTIVE
+ *       description: >
+ *         Account lifecycle. `SUSPENDED` and `DELETED` both block sign-in and
+ *         revoke existing sessions; the difference is intent and reversibility.
+ *         `DELETED` is set only by `DELETE /users/{id}` (soft delete), never by
+ *         the status endpoint, so a removal always goes through the code that
+ *         stamps `deletedAt`.
+ *       example: ACTIVE
+ *
  *     User:
  *       type: object
  *       properties:
@@ -101,8 +113,17 @@
  *           items: { type: string, enum: [EMAIL, FACEBOOK] }
  *           example: [EMAIL]
  *         phone: { type: string, example: "+8801712345678" }
- *         avatarUrl: { type: string, nullable: true }
- *         isActive: { type: boolean, example: true }
+ *         image:
+ *           type: string
+ *           nullable: true
+ *           description: Profile picture URL.
+ *           example: https://cdn.gadgetsimp.dev/u/1003.jpg
+ *         status: { $ref: '#/components/schemas/UserStatus' }
+ *         deletedAt:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *           description: Set by the soft delete; cleared when the account is restored.
  *         emailVerifiedAt:
  *           type: string
  *           format: date-time

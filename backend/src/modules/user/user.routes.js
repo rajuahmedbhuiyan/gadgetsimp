@@ -21,20 +21,46 @@ router.get("/me", readLimiter, controller.getMe);
 
 router.patch("/me", writeLimiter, validate(schemas.updateProfile), controller.updateMe);
 
-/* --------------------------------- Staff --------------------------------- */
+/* ------------------------------ Staff: read ------------------------------ */
 
-// Moderators and above may browse the user list; only admins and above can
-// change anything on it.
-router.get(
-  "/",
+/**
+ * Filtered, paginated listing. `authorize(ROLES.ADMIN)` means admin **and
+ * above**, so owners are included without being listed separately.
+ *
+ * `readLimiter` rather than `writeLimiter` despite being a POST: the tier
+ * should reflect what the request costs, and this is a read. Metering it as a
+ * write would throttle an admin paging through a table.
+ */
+router.post(
+  "/filter",
   readLimiter,
-  authorize(ROLES.MODERATOR),
-  validate(schemas.listUsers),
-  controller.listUsers
+  authorize(ROLES.ADMIN),
+  validate(schemas.filterUsers),
+  controller.filterUsers
 );
 
-// Declared after `/me` so the literal path is matched before this parameter
-// route can swallow it.
+/**
+ * Account creation.
+ *
+ * Sits at `/users/create` rather than `POST /users` because that verb and path
+ * are taken by the filter endpoint above. Splitting them by path keeps both
+ * explicit; the alternative - one endpoint branching on the body shape - is
+ * how you end up creating a user by sending a malformed filter.
+ *
+ * Owner-only. Creating accounts outright, skipping email verification and
+ * choosing the role, is the most privileged write in the API, which is why it
+ * does not extend to admins.
+ */
+router.post(
+  "/create",
+  writeLimiter,
+  authorize(ROLES.OWNER),
+  validate(schemas.createUser),
+  controller.createUser
+);
+
+// Declared after the literal `/me` and `/create` paths so neither is swallowed
+// by this parameter route.
 router.get(
   "/:id",
   readLimiter,
@@ -42,6 +68,8 @@ router.get(
   authorizeSelfOrAbove((req) => req.params.id),
   controller.getUser
 );
+
+/* ------------------------------ Staff: write ----------------------------- */
 
 router.patch(
   "/:id/role",
@@ -57,6 +85,33 @@ router.patch(
   authorize(ROLES.ADMIN),
   validate(schemas.updateStatus),
   controller.updateStatus
+);
+
+/* -------------------------------- Deletion ------------------------------- */
+
+/**
+ * Soft delete - the routine one. Admin and above, and reversible by setting
+ * the status back to ACTIVE.
+ */
+router.delete(
+  "/:id",
+  writeLimiter,
+  authorize(ROLES.ADMIN),
+  validate(schemas.deleteUser),
+  controller.softDelete
+);
+
+/**
+ * Hard delete - owner only, and on its own path rather than a `?force=true`
+ * flag on the route above. An irreversible action should be impossible to
+ * trigger by fumbling a query parameter.
+ */
+router.delete(
+  "/:id/permanent",
+  writeLimiter,
+  authorize(ROLES.OWNER),
+  validate(schemas.deleteUser),
+  controller.hardDelete
 );
 
 module.exports = router;

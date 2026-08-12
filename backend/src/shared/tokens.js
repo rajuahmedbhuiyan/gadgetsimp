@@ -90,13 +90,31 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * Cookie attributes for the refresh token.
+ *
+ * `sameSite` is the attribute that most often makes a refresh token look
+ * "broken", so it is configurable rather than hard-coded:
+ *
+ *   - **lax** (default) - correct when the frontend and API share a site.
+ *     Ports do not count, so localhost:3000 -> localhost:4000 is same-site and
+ *     works; so is gadgetsimp.dev -> api.gadgetsimp.dev.
+ *   - **none** - required when they are genuinely cross-site (a Vercel
+ *     frontend calling an API on another domain). The browser then *silently
+ *     drops* a lax/strict cookie on every request, which presents exactly as
+ *     "the refresh token is not generating". `none` demands `secure`, so it
+ *     only works over HTTPS.
+ *   - **strict** - tightest, but the cookie is withheld on any cross-site
+ *     request at all.
+ *
+ * `path` scopes the cookie to the auth routes: it is the only place it is
+ * ever needed, so it is not attached to every catalog request.
+ */
 function refreshCookieOptions() {
   return {
-    httpOnly: true,
-    secure: env.isProduction,
-    // 'lax' still sends the cookie on top-level navigation, which is what a
-    // storefront needs, while blocking the cross-site POSTs that CSRF relies on.
-    sameSite: env.isProduction ? "strict" : "lax",
+    httpOnly: true, // unreadable to JavaScript, so XSS cannot steal it
+    secure: env.isProduction || env.COOKIE_SAMESITE === "none",
+    sameSite: env.COOKIE_SAMESITE,
     domain: env.COOKIE_DOMAIN,
     path: `${env.API_PREFIX}/auth`,
     maxAge: parseDuration(env.JWT_REFRESH_EXPIRES_IN),

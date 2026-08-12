@@ -3,6 +3,7 @@
 const ApiError = require("../shared/ApiError");
 const { verifyAccessToken } = require("../shared/tokens");
 const User = require("../modules/user/user.model");
+const { USER_STATUS } = require("../shared/constants");
 
 /**
  * Verifies the bearer token and attaches the caller to `req.user`.
@@ -31,8 +32,15 @@ async function authenticate(req, _res, next) {
     return next(ApiError.unauthorized("Account no longer exists", { code: "USER_NOT_FOUND" }));
   }
 
-  if (!user.isActive) {
-    return next(ApiError.forbidden("This account has been deactivated", { code: "ACCOUNT_DISABLED" }));
+  if (!user.canSignIn()) {
+    return next(
+      ApiError.forbidden(
+        user.status === USER_STATUS.DELETED
+          ? "This account no longer exists"
+          : "This account has been suspended",
+        { code: "ACCOUNT_DISABLED" }
+      )
+    );
   }
 
   if (user.tokenVersion !== payload.tokenVersion) {
@@ -63,7 +71,7 @@ async function optionalAuthenticate(req, _res, next) {
     const payload = verifyAccessToken(token);
     const user = await User.findById(payload.sub).select("+tokenVersion");
 
-    if (user?.isActive && user.tokenVersion === payload.tokenVersion) {
+    if (user?.canSignIn() && user.tokenVersion === payload.tokenVersion) {
       req.user = user;
     }
   } catch {

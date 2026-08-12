@@ -298,3 +298,52 @@ describe("POST /auth/resend-verification", () => {
     expect(response.status).toBe(200);
   });
 });
+
+describe("mail delivery failures", () => {
+  const mailer = require("../src/config/mailer");
+
+  /**
+   * A provider rejection is an upstream failure, not a bug in the request.
+   * Before this was handled it surfaced as a bare 500 "Something went wrong",
+   * which tells the client nothing it can act on.
+   */
+  function stubSmtpFailure(overrides) {
+    return jest
+      .spyOn(require("nodemailer"), "createTransport")
+      .mockReturnValue({
+        sendMail: jest.fn().mockRejectedValue(Object.assign(new Error("Data command failed"), overrides)),
+        close: jest.fn(),
+      });
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    mailer.closeMailer();
+  });
+
+  it("reports Gmail's daily cap as 503 EMAIL_QUOTA_EXCEEDED", async () => {
+    mailer.closeMailer(); // drop the cached transport so the stub is used
+    stubSmtpFailure({
+      responseCode: 550,
+      response: "550-5.4.5 Daily user sending limit exceeded",
+      code: "EENVELOPE",
+    });
+
+    const response = await request(app).post(`${API}/auth/register`).send(signup());
+
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe("EMAIL_QUOTA_EXCEEDED");
+    // Never leaks the raw SMTP transcript to the client.
+    expect(response.body.message).not.toMatch(/5\.4\.5|gsmtp/);
+  });
+
+  it("reports any other send failure as 503 EMAIL_DELIVERY_FAILED", async () => {
+    mailer.closeMailer();
+    stubSmtpFailure({ code: "EAUTH", response: "535 Bad credentials" });
+
+    const response = await request(app).post(`${API}/auth/register`).send(signup());
+
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe("EMAIL_DELIVERY_FAILED");
+  });
+});

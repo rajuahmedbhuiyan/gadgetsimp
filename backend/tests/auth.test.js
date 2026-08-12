@@ -4,7 +4,7 @@ const request = require("supertest");
 const createApp = require("../src/app");
 const User = require("../src/modules/user/user.model");
 const { API, createUserAndLogin, uniqueEmail, verificationTokenFor } = require("./helpers");
-const { REFRESH_COOKIE_NAME } = require("../src/shared/constants");
+const { REFRESH_COOKIE_NAME, USER_STATUS } = require("../src/shared/constants");
 
 const app = createApp();
 
@@ -63,7 +63,7 @@ describe("POST /auth/login", () => {
 
   it("refuses a deactivated account", async () => {
     const { email, password } = await createUserAndLogin(app);
-    await User.updateOne({ email }, { isActive: false });
+    await User.updateOne({ email }, { status: USER_STATUS.SUSPENDED });
 
     const response = await request(app).post(`${API}/auth/login`).send({ email, password });
 

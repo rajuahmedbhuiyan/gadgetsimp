@@ -10,7 +10,7 @@ const createApp = require("../src/app");
 const User = require("../src/modules/user/user.model");
 const PendingRegistration = require("../src/modules/auth/pendingRegistration.model");
 const { API, createUserAndLogin, uniqueEmail } = require("./helpers");
-const { AUTH_PROVIDERS, ROLES } = require("../src/shared/constants");
+const { AUTH_PROVIDERS, ROLES, USER_STATUS } = require("../src/shared/constants");
 
 const app = createApp();
 const SOCIAL = `${API}/auth/social-login`;
@@ -222,7 +222,7 @@ describe.each([
 
     stub(withEmail(`${type}-500`, email));
     await request(app).post(SOCIAL).send({ type, token: TOKEN });
-    await User.updateOne({ email }, { isActive: false });
+    await User.updateOne({ email }, { status: USER_STATUS.SUSPENDED });
 
     stub(withEmail(`${type}-500`, email));
     const response = await request(app).post(SOCIAL).send({ type, token: TOKEN });
@@ -393,19 +393,34 @@ describe("one person, both providers", () => {
 });
 
 describe("unconfigured provider", () => {
-  it("reports 503 rather than failing mid-verification", async () => {
-    // google.js reads env at call time through the registry, so clearing the
-    // module's view of configuration is done by re-requiring with it unset.
-    jest.isolateModules(() => {
-      const previous = process.env.GOOGLE_CLIENT_ID;
-      delete process.env.GOOGLE_CLIENT_ID;
-      const { getProvider } = require("../src/modules/auth/providers");
+  /**
+   * The provider module's own `isConfigured` is stubbed rather than deleting
+   * an environment variable and re-requiring: env juggling makes the result
+   * depend on whatever the developer's `.env` happens to contain, which is
+   * how a test passes on one machine and fails on another.
+   */
+  const googleProvider = require("../src/modules/auth/providers/google");
 
-      expect(() => getProvider("GOOGLE")).toThrow(
-        /GOOGLE sign-in is not configured/
-      );
+  it("answers 503 instead of failing mid-verification", async () => {
+    const spy = jest.spyOn(googleProvider, "isConfigured").mockReturnValue(false);
 
-      process.env.GOOGLE_CLIENT_ID = previous;
-    });
+    const response = await request(app)
+      .post(SOCIAL)
+      .send({ type: "GOOGLE", token: TOKEN });
+
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe("SOCIAL_PROVIDER_NOT_CONFIGURED");
+
+    spy.mockRestore();
+  });
+
+  it("omits it from the advertised provider list", async () => {
+    const spy = jest.spyOn(googleProvider, "isConfigured").mockReturnValue(false);
+
+    const response = await request(app).get(`${API}/auth/providers`);
+
+    expect(response.body.data.providers).toEqual(["EMAIL", "FACEBOOK"]);
+
+    spy.mockRestore();
   });
 });

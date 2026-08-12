@@ -4,8 +4,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const authRoutes = require("../modules/auth/auth.routes");
 const userRoutes = require("../modules/user/user.routes");
-const categoryRoutes = require("../modules/category/category.routes");
-const productRoutes = require("../modules/product/product.routes");
 const { sendResponse } = require("../shared/sendResponse");
 
 const router = express.Router();
@@ -14,14 +12,12 @@ const router = express.Router();
  * The API surface, versioned by mount prefix (`/api/v1`).
  *
  * Adding a feature is adding one entry to this table and one folder under
- * `modules/` - no other file needs to change. Cart, orders and reviews slot
- * in here the same way.
+ * `modules/` - no other file needs to change. Catalog, cart and orders slot
+ * in here the same way when they are built.
  */
 const modules = [
   { path: "/auth", router: authRoutes },
   { path: "/users", router: userRoutes },
-  { path: "/categories", router: categoryRoutes },
-  { path: "/products", router: productRoutes },
 ];
 
 /**

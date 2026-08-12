@@ -91,6 +91,19 @@ const login = {
     .strict(),
 };
 
+const forgotPassword = {
+  body: z.object({ email: emailSchema }).strict(),
+};
+
+const resetPassword = {
+  body: z
+    .object({
+      token: z.string().trim().min(20, "Invalid reset token").max(256),
+      newPassword: passwordSchema,
+    })
+    .strict(),
+};
+
 const changePassword = {
   body: z
     .object({
@@ -110,6 +123,8 @@ module.exports = {
   resendVerification,
   socialLogin,
   login,
+  forgotPassword,
+  resetPassword,
   changePassword,
   passwordSchema,
   emailSchema,

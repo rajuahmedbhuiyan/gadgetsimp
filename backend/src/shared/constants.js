@@ -5,7 +5,7 @@
  * Defined once so an enum can never drift between the schema that stores it,
  * the validator that accepts it and the docs that advertise it.
  *
- * Cart / order / review vocabulary lands here when those modules land.
+ * Catalog, cart and order vocabulary lands here when those modules land.
  */
 
 /**
@@ -54,25 +54,6 @@ function assignableRoles(actorRole) {
   return ROLE_VALUES.filter((role) => roleRank(role) < roleRank(actorRole));
 }
 
-const PRODUCT_STATUS = Object.freeze({
-  DRAFT: "draft",
-  ACTIVE: "active",
-  ARCHIVED: "archived",
-});
-
-const PRODUCT_STATUS_VALUES = Object.freeze(Object.values(PRODUCT_STATUS));
-
-/**
- * Money is stored as integer minor units (poisha/cents) everywhere. Floats
- * silently lose precision once you start summing line totals and applying
- * percentage discounts, and an ecommerce ledger cannot afford that. Formatting
- * back to major units is the client's job.
- */
-const CURRENCY = Object.freeze({
-  CODE: "BDT",
-  MINOR_UNITS_PER_MAJOR: 100,
-});
-
 const PAGINATION = Object.freeze({
   DEFAULT_PAGE: 1,
   DEFAULT_LIMIT: 20,
@@ -98,6 +79,31 @@ const BRAND = Object.freeze({
   BACKGROUND: "#f4f4f5",
   BORDER: "#e5e7eb",
 });
+
+/**
+ * Account lifecycle, replacing the old `isActive` boolean.
+ *
+ * A boolean could only ever say "on" or "off", which conflated two very
+ * different situations: an account a moderator suspended, and one that was
+ * deleted. They need different handling - a suspension is reversible and the
+ * user should be told, a deletion should vanish from listings - and a string
+ * enum leaves room for the states that always arrive later (PENDING, BANNED)
+ * without another schema migration.
+ *
+ * Note the spelling: SUSPENDED, not "SUSPENSED". Enum values end up in
+ * client code, stored rows and support scripts, so a typo here is permanent.
+ */
+const USER_STATUS = Object.freeze({
+  ACTIVE: "ACTIVE",
+  SUSPENDED: "SUSPENDED",
+  DELETED: "DELETED",
+});
+
+const USER_STATUS_VALUES = Object.freeze(Object.values(USER_STATUS));
+
+// The states that may hold a session. Anything else is refused at sign-in and
+// has its existing sessions revoked.
+const SIGN_IN_ALLOWED_STATUSES = Object.freeze([USER_STATUS.ACTIVE]);
 
 /**
  * How users can authenticate. `EMAIL` accounts have a password; social
@@ -134,6 +140,13 @@ const REFRESH_COOKIE_NAME = "gs_refresh_token";
  */
 const EMAIL_VERIFICATION_TTL_MINUTES = 10;
 
+/**
+ * How long a password-reset link stays usable. Same reasoning as the
+ * verification link, and arguably tighter: this token can take over an
+ * existing account with orders and saved details behind it.
+ */
+const PASSWORD_RESET_TTL_MINUTES = 10;
+
 module.exports = {
   ROLES,
   ROLE_VALUES,
@@ -141,14 +154,15 @@ module.exports = {
   roleRank,
   roleAtLeast,
   assignableRoles,
-  PRODUCT_STATUS,
-  PRODUCT_STATUS_VALUES,
-  CURRENCY,
   PAGINATION,
   BRAND,
+  USER_STATUS,
+  USER_STATUS_VALUES,
+  SIGN_IN_ALLOWED_STATUSES,
   AUTH_PROVIDERS,
   AUTH_PROVIDER_VALUES,
   SOCIAL_PROVIDERS,
   REFRESH_COOKIE_NAME,
   EMAIL_VERIFICATION_TTL_MINUTES,
+  PASSWORD_RESET_TTL_MINUTES,
 };

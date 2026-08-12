@@ -148,6 +148,30 @@ async function logoutAll(req, res) {
   return sendResponse(res, { message: "Signed out of all devices" });
 }
 
+/**
+ * Answers 200 whether or not the address has an account. Anything else would
+ * turn this into a free membership oracle.
+ */
+async function forgotPassword(req, res) {
+  await authService.forgotPassword(req.validated.body.email);
+
+  return sendResponse(res, {
+    message: "If an account exists for that address, a reset link is on its way.",
+  });
+}
+
+async function resetPassword(req, res) {
+  await authService.resetPassword(req.validated.body);
+
+  // Every session was revoked, so clear the cookie this browser is holding.
+  const { maxAge, ...clearOptions } = refreshCookieOptions();
+  res.clearCookie(REFRESH_COOKIE_NAME, clearOptions);
+
+  return sendResponse(res, {
+    message: "Password reset. Please sign in with your new password.",
+  });
+}
+
 async function changePassword(req, res) {
   await authService.changePassword(req.user.id, req.validated.body);
 
@@ -173,6 +197,8 @@ module.exports = {
   socialLogin,
   listProviders,
   login,
+  forgotPassword,
+  resetPassword,
   refresh,
   logout,
   logoutAll,

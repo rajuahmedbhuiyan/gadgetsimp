@@ -45,16 +45,13 @@ const definition = {
     { url: `http://localhost:${env.PORT}${env.API_PREFIX}`, description: "Local" },
     { url: `https://api.gadgetsimp.dev${env.API_PREFIX}`, description: "Production" },
   ],
-  // Only tags with operations behind them. Declaring Cart/Orders/Reviews
-  // before those modules exist renders empty sections in Swagger UI, which
-  // reads as a broken spec rather than a roadmap - add each tag with its
-  // module.
+  // Only tags with operations behind them. Declaring a tag before its module
+  // exists renders an empty section in Swagger UI, which reads as a broken
+  // spec rather than a roadmap - add each tag with its module.
   tags: [
     { name: "Health", description: "Liveness and readiness probes" },
     { name: "Auth", description: "Registration, login, token rotation, logout" },
     { name: "Users", description: "Profile management and admin user administration" },
-    { name: "Categories", description: "Catalog taxonomy" },
-    { name: "Products", description: "Catalog browsing, search and admin authoring" },
   ],
   components: {
     securitySchemes: {
@@ -142,6 +139,10 @@ function mountSwagger(app) {
     customCss: FORCE_LIGHT_THEME_CSS,
     swaggerOptions: {
       persistAuthorization: true, // keep the bearer token across reloads
+      // Without this, "Try it out" sends no cookies, so /auth/refresh always
+      // answers REFRESH_TOKEN_MISSING and the refresh flow looks broken when
+      // it is only untestable.
+      withCredentials: true,
       displayRequestDuration: true,
       docExpansion: "none",
       filter: true,

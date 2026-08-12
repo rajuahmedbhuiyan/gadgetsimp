@@ -83,6 +83,13 @@ const envSchema = z.object({
 
   COOKIE_DOMAIN: z.string().optional(),
 
+  /**
+   * SameSite policy for the refresh cookie. See shared/tokens.js - this is the
+   * setting that decides whether the browser keeps the cookie at all when the
+   * frontend and API are on different sites.
+   */
+  COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("lax"),
+
   // Where the verification link points - the frontend, not the API.
   APP_URL: z.url("APP_URL must be a valid URL").default("http://localhost:3000"),
 
@@ -200,6 +207,17 @@ const envSchema = z.object({
         path: ["GOOGLE_CLIENT_ID"],
         message:
           "should end with .apps.googleusercontent.com - use the OAuth 2.0 Web application client ID, not an API key or client secret",
+      });
+    }
+
+    // `SameSite=None` without `Secure` is rejected outright by every current
+    // browser, so the cookie would simply never be stored.
+    if (config.COOKIE_SAMESITE === "none" && config.NODE_ENV !== "production") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["COOKIE_SAMESITE"],
+        message:
+          "'none' requires HTTPS (Secure), so it only works in production - use 'lax' locally",
       });
     }
 

@@ -3,6 +3,7 @@
 const nodemailer = require("nodemailer");
 const env = require("./env");
 const logger = require("./logger");
+const ApiError = require("../shared/ApiError");
 
 /**
  * Outbound email.
@@ -36,11 +37,24 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Tests never send real mail, whatever MAIL_PROVIDER says.
+ *
+ * The belt to `tests/setup.js`'s braces, and worth having: a `.env` holding
+ * real Gmail credentials is normal, and one test run that picks them up sends
+ * hundreds of messages to fake addresses and exhausts the daily quota. This
+ * makes that impossible rather than merely unlikely.
+ */
 function isLogTransport() {
-  return env.MAIL_PROVIDER === "log";
+  return env.isTest || env.MAIL_PROVIDER === "log";
 }
 
 function buildTransport() {
+  // Checked first, so a test run can never construct a real SMTP transport.
+  if (env.isTest) {
+    return nodemailer.createTransport({ jsonTransport: true });
+  }
+
   if (env.MAIL_PROVIDER === "gmail") {
     return nodemailer.createTransport({
       host: "smtp.gmail.com",
@@ -124,16 +138,64 @@ function trackQuota(to) {
 }
 
 /**
+ * Turns a raw SMTP failure into something the API can answer with.
+ *
+ * Left alone, a provider rejection propagates as an unrecognised error and
+ * the caller gets a bare 500 "Something went wrong" - which tells a developer
+ * nothing and a user less. These are upstream failures, not bugs in the
+ * request, so they map to 503 with a code the client can branch on.
+ */
+function asDeliveryError(error) {
+  const response = String(error?.response ?? error?.message ?? "");
+
+  // Gmail's daily cap. Distinctive enough to name, because the operator fix
+  // (wait for the rolling 24h reset, or switch provider) is entirely
+  // different from a wrong password or a DNS failure.
+  if (error?.responseCode === 550 && /sending limit exceeded/i.test(response)) {
+    logger.fatal(
+      { err: error, quota: env.MAIL_DAILY_QUOTA },
+      "Gmail daily sending limit reached - signup emails are failing for everyone. " +
+        "It resets on a rolling 24h basis. Use MAIL_PROVIDER=log for local development."
+    );
+
+    return new ApiError(503, "We cannot send emails right now. Please try again later.", {
+      code: "EMAIL_QUOTA_EXCEEDED",
+      cause: error,
+    });
+  }
+
+  if (error?.code === "EAUTH") {
+    logger.fatal(
+      { err: error },
+      "SMTP authentication failed - check GMAIL_APP_PASSWORD (it must be a 16-character App Password, not the account password)"
+    );
+  } else {
+    logger.error({ err: error }, "Email delivery failed");
+  }
+
+  return new ApiError(503, "We could not send that email. Please try again shortly.", {
+    code: "EMAIL_DELIVERY_FAILED",
+    cause: error,
+  });
+}
+
+/**
  * @param {{to: string, subject: string, html: string, text: string}} message
  */
 async function sendMail({ to, subject, html, text }) {
-  const info = await getTransport().sendMail({
-    from: env.MAIL_FROM,
-    to,
-    subject,
-    html,
-    text,
-  });
+  let info;
+
+  try {
+    info = await getTransport().sendMail({
+      from: env.MAIL_FROM,
+      to,
+      subject,
+      html,
+      text,
+    });
+  } catch (error) {
+    throw asDeliveryError(error);
+  }
 
   if (isLogTransport()) {
     sentMessages.push({ to, subject, text, html });

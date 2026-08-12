@@ -3,16 +3,17 @@
 Express 5 + MongoDB backend for the GadgetSimp storefront. Modular monolith,
 tiered rate limiting, OpenAPI docs generated from the code.
 
-**Implemented:** auth, users, categories, products.
-**Designed for, not yet built:** cart, orders, reviews — each drops in as one
-folder under `src/modules/` plus one line in `src/routes/index.js`.
+**Implemented:** auth, users.
+**Not yet built:** catalog (categories, products), cart, orders, reviews —
+each drops in as one folder under `src/modules/` plus one line in
+`src/routes/index.js`.
 
 ## Quick start
 
 ```bash
 cp .env.example .env          # then fill in the two JWT secrets
 npm install
-npm run seed                  # optional: admin + customer + demo catalog
+npm run seed                  # optional: one account per role
 npm run dev
 ```
 
@@ -31,15 +32,15 @@ ids from 1000):
 | `customer@gadgetsimp.dev` | `Customer1234` | `ROLE_CUSTOMER` |
 
 ```bash
-npm test              # 144 tests, in-memory MongoDB, no external services
+npm test              # 230 tests, in-memory MongoDB, no external services
 npm run docs:export   # write openapi.json for client generation / CI diffing
 ```
 
 ## Architecture
 
-Feature-first (vertical slices), not layer-first. Everything about products
-lives in `modules/product/`, so a change to the catalog touches one folder
-instead of reaching into four sibling directories.
+Feature-first (vertical slices), not layer-first. Everything about a feature
+lives in its own folder, so a change touches one directory instead of reaching
+into four sibling ones.
 
 ```
 src/
@@ -84,9 +85,13 @@ writes one parser rather than one per endpoint. Errors carry a stable `code` —
 branch on that, never on the message.
 
 ```json
-{ "success": true, "message": "Products retrieved", "data": {}, "meta": {} }
-{ "success": false, "message": "…", "code": "RATE_LIMIT_EXCEEDED", "errors": [], "requestId": "…" }
+{ "success": true,  "statusCode": 200, "message": "Products retrieved", "data": {}, "meta": {} }
+{ "success": false, "statusCode": 429, "message": "…", "code": "RATE_LIMIT_EXCEEDED", "errors": [], "requestId": "…" }
 ```
+
+`statusCode` is repeated in the body on both branches. It is redundant over
+plain HTTP, but it survives a logged payload, a webhook relay, or a client
+whose HTTP wrapper only hands back the parsed JSON.
 
 **Services throw, one place catches.** Controllers have no try/catch: Express 5
 forwards rejected promises to the error middleware on its own, so no
@@ -101,27 +106,16 @@ trade-off is that sequential ids are guessable and leak volume, so anything
 exposed by id is authorised on ownership rather than obscurity, and probing a
 neighbouring id returns 404 rather than 403.
 
-**Money is integer minor units.** `169999.00 BDT` is stored and sent as
-`16999900`. Floats lose precision as soon as you sum line totals or apply a
-percentage discount.
-
-**Categories use a materialised path.** Each row stores its ancestor chain
-(`/electronics/laptops/gaming`), so "everything under Electronics" is one
-indexed prefix match instead of a recursive walk. Renames and moves rewrite
-descendants in a single bulk pass.
-
-**Stock is adjusted by signed delta, guarded in the query.** The filter carries
-`stock: { $gte: -delta }`, so the database itself refuses to go negative. A
-read-then-write in application code loses that race — there's a test that fires
-ten concurrent decrements at one unit and asserts exactly one wins.
-
 **Indexes are built explicitly at boot.** Mongoose's `autoIndex` is not awaited
 and is skipped entirely when `bufferCommands` is off, which silently leaves a
 database with nothing but `_id_` — no unique email constraint, no text search.
 `ensureIndexes()` runs after models register and before the socket opens;
 `tests/indexes.test.js` asserts the real index set.
 
-**Products are archived, never deleted.** Order history will reference them.
+**The seed refuses non-local databases.** It deletes before it writes, and
+`NODE_ENV=development` pointed at a shared Atlas cluster looks perfectly safe
+right until it erases everyone's data. Non-local targets need
+`SEED_CONFIRM=yes`.
 
 ## Rate limiting
 
@@ -131,12 +125,11 @@ Configured in [`src/middleware/rateLimiter.js`](src/middleware/rateLimiter.js).
 | Tier | Budget | Applied to |
 | --- | --- | --- |
 | `global` | 900 / 15 min | every API route, as a backstop |
-| `read` | 120 / min | catalog browsing |
-| `search` | 30 / min | `?search=` only — hits a `$text` index |
+| `read` | 120 / min | reads, including the user filter |
 | `write` | 40 / min | mutations |
 | `auth` | 10 **failures** / 15 min | login, refresh |
 | `register` | 5 / hour | account creation |
-| `sensitive` | 5 / hour | password change |
+| `sensitive` | 5 / hour | password change, forgot/reset, resend |
 
 - **Identity over IP.** Signed-in callers are keyed by user id, so shoppers
   behind one NAT or carrier CGNAT don't share a bucket. Anonymous callers fall
@@ -144,7 +137,6 @@ Configured in [`src/middleware/rateLimiter.js`](src/middleware/rateLimiter.js).
   within its own /56 to reset the counter.
 - **Failures are what count on auth.** `skipSuccessfulRequests` means correct
   logins are free; wrong passwords burn the budget.
-- **Search is metered separately** and only when a search term is present.
 - Every response carries `RateLimit` / `RateLimit-Policy` (RFC draft-8); a 429
   adds `Retry-After` and returns the standard error envelope.
 
@@ -170,6 +162,13 @@ POST /auth/verify-email  -> 201. Consumes the token, creates the account,
 POST /auth/resend-verification
 ```
 
+The emailed link is valid for **10 minutes**. It is a bearer credential that
+creates an account, so the window is deliberately narrow; `resend-verification`
+is the recovery path when delivery outruns it, and it invalidates the previous
+link. Expiry is enforced by an explicit `expiresAt` comparison, not by the TTL
+index — Mongo's TTL sweep only runs about once a minute, so the index is
+housekeeping while the check is what makes the window exact.
+
 Unverified signups are held in their own collection, never in `users`. That
 keeps every row in `users` a real, reachable person, means no half-account can
 log in or hold a role, and lets abandoned signups expire on their own via a
@@ -189,29 +188,50 @@ TTL index (24 h) instead of squatting on an email address forever.
 
 ### Sign-in methods
 
-`EMAIL` (password) and `FACEBOOK`. A user's `authProviders` array lists every
-method their account accepts.
+`EMAIL` (password), `FACEBOOK`, `GOOGLE`. A user's `authProviders` array lists
+every method their account accepts; one person can link all three.
 
-`POST /auth/facebook` takes the user access token from the Facebook JS SDK and
-covers both signup and signin — the user taps one button and expects to end up
-signed in either way.
+```
+POST /auth/social-login   { "type": "FACEBOOK" | "GOOGLE", "token": "..." }
+GET  /auth/providers      -> what this deployment actually has configured
+```
 
-- The token is **verified server-side and never trusted as presented**. Graph's
-  `debug_token` confirms it is valid *and issued to this app* — without that
-  `app_id` check, a token from any other Facebook app could be replayed here to
-  sign in as that user. This is why the app secret must never reach the browser.
-- No email-verification step: Facebook has already verified the address, which
-  is the point of delegating identity.
-- If a password account already exists for the same address, Facebook is
-  **linked** to it rather than creating a duplicate, and both methods keep
-  working. That is only safe because Facebook verifies email ownership — if it
-  did not, this would be an account-takeover primitive.
-- Facebook sometimes shares no email (user registered by phone, or declined the
-  permission) → `FACEBOOK_EMAIL_MISSING`, and the client should fall back to
-  email signup.
-- A Facebook-only account has **no password**: `changePassword` returns
+One endpoint covers signup and signin for every provider — the user taps a
+button and expects to end up signed in either way.
+
+**What `token` is differs by provider**, because the vendors hand the browser
+different things:
+
+| `type` | `token` | Verified by |
+| --- | --- | --- |
+| `FACEBOOK` | opaque **access token** from `FB.login()` | Graph `debug_token` over HTTP |
+| `GOOGLE` | **ID token** (`credential`) from Google Identity Services | signature check against Google's public keys |
+
+Each provider is one file under
+[`modules/auth/providers/`](src/modules/auth/providers/) exposing
+`isConfigured()` and `verifyToken()` and returning a normalised profile, so the
+service never branches on which one is in play. Adding a provider is one file
+plus one line in the registry.
+
+- The token is **verified server-side and never trusted as presented**, and both
+  paths check the token was issued to *this* application (Facebook's `app_id`,
+  Google's `aud`). Without that audience check, a token from any other app could
+  be replayed here to sign in as that user. Decoding a Google ID token without
+  verifying its signature is the classic way this gets built insecurely — an
+  unverified JWT is just attacker-supplied JSON.
+- No email-verification step: the provider already verified the address. A
+  Google account with `email_verified: false` is rejected outright.
+- If an account already exists for the same address, the provider is **linked**
+  to it rather than duplicated, and every linked method keeps working. Safe only
+  because the providers verify email ownership; otherwise it would be an
+  account-takeover primitive.
+- No email from the provider (Facebook user registered by phone, or declined the
+  permission) → `SOCIAL_EMAIL_MISSING`; fall back to email signup.
+- A social-only account has **no password**: `changePassword` returns
   `PASSWORD_NOT_SET`, and password login fails with the ordinary generic
   `INVALID_CREDENTIALS` rather than admitting the account exists.
+- An unconfigured provider returns **503 `SOCIAL_PROVIDER_NOT_CONFIGURED`**, and
+  is omitted from `GET /auth/providers`.
 
 ### Email delivery
 
@@ -246,6 +266,58 @@ Buttons are **dark ink on amber, not white**: white on `#febc01` measures
 **1.69:1**, far below the 4.5:1 WCAG AA minimum — `#1a1a1a` gives 10.3:1. The
 templates also declare `color-scheme: light` so iOS and Outlook dark modes
 cannot invert the amber into mud.
+
+### Password recovery
+
+```
+POST /auth/forgot-password   { email }              -> always 200
+POST /auth/reset-password    { token, newPassword }
+```
+
+- The link is valid for **10 minutes** and is **single use**; only its SHA-256
+  hash is stored, so a database dump cannot be used to seize accounts. Issuing
+  a new link invalidates the previous one.
+- `forgot-password` answers 200 whether or not the address exists — a different
+  response would be a free membership oracle, undoing the care taken over login
+  and signup.
+- A successful reset **revokes every session**. A reset is the standard response
+  to a suspected compromise, so leaving other devices signed in defeats it.
+- A **password-changed email** goes out on every change, not just user-initiated
+  ones — that message is what lets a victim notice a takeover.
+- A social-only account can reset too: they own the address, and it gives them a
+  password to use alongside Google/Facebook, adding `EMAIL` to their providers.
+
+### Creating users directly (owner only)
+
+```
+POST /users   { firstName, lastName, email, password?, role?, sendEmail? }
+```
+
+Requires **`ROLE_OWNER`** — not admin. Creating accounts outright, skipping
+verification and choosing the role, is the most privileged write in the API.
+
+- The account is created **already verified** and can sign in immediately: it is
+  vouched for by the highest-privileged human in the system, so a confirmation
+  round trip proves nothing their authority does not already.
+- **`password` is optional.** Omitted, one is generated by
+  [`generatePassword`](src/shared/generatePassword.js), emailed to the new user,
+  and returned once as `generatedPassword` so the owner can relay it another
+  way. A password the *caller* supplied is never echoed back — that would put a
+  known secret in their logs for nothing.
+- The generator draws from the CSPRNG (`crypto.randomInt`, no modulo bias),
+  *guarantees* the policy classes rather than hoping for them, and excludes
+  visually ambiguous characters (`0/O`, `1/l/I`) since the password gets read
+  off a screen and retyped.
+- The role must be **below the creator's own rank** — the same rule
+  `/users/{id}/role` enforces — so an owner creates admins but not another
+  owner. That means the *only* route to a second owner is the seed; if you want
+  succession, relax the check in `user.service.js` deliberately.
+- `sendEmail: false` creates the account silently.
+
+> A temporary password in an inbox is a real, if bounded, exposure — mail sits in
+> plain text on a server that isn't ours. Now that `/auth/reset-password` exists,
+> the stronger shape is to email a one-time *set your password* link instead,
+> reusing that token machinery. Small change, worth making before launch.
 
 ### Roles
 

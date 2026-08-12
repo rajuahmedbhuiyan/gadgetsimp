@@ -15,10 +15,18 @@ const {
 const env = require("../../config/env");
 const logger = require("../../config/logger");
 const { sendMail } = require("../../config/mailer");
-const { verificationEmail, welcomeEmail, existingAccountEmail } = require("./auth.emails");
+const {
+  verificationEmail,
+  welcomeEmail,
+  existingAccountEmail,
+  passwordResetEmail,
+  passwordChangedEmail,
+} = require("./auth.emails");
 const {
   EMAIL_VERIFICATION_TTL_MINUTES,
+  PASSWORD_RESET_TTL_MINUTES,
   AUTH_PROVIDERS,
+  USER_STATUS,
 } = require("../../shared/constants");
 const { getProvider } = require("./providers");
 
@@ -63,7 +71,7 @@ async function register({ firstName, lastName, email, password, phone }) {
     return;
   }
 
-  const { token, tokenHash } = createVerificationToken();
+  const { token, tokenHash } = createSecureToken();
   const passwordHash = await bcrypt.hash(password, env.BCRYPT_ROUNDS);
   const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MINUTES * 60 * 1000);
 
@@ -181,7 +189,7 @@ async function resendVerification(email) {
 
   // A fresh token each time, so links from earlier emails stop working and a
   // forwarded or intercepted old message cannot be used.
-  const { token, tokenHash } = createVerificationToken();
+  const { token, tokenHash } = createSecureToken();
 
   pending.tokenHash = tokenHash;
   pending.expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MINUTES * 60 * 1000);
@@ -233,7 +241,7 @@ async function socialLogin(type, token, context = {}) {
   }).select("+tokenVersion +sessions +socialAccounts");
 
   if (byProviderId) {
-    assertActive(byProviderId);
+    assertCanSignIn(byProviderId);
     byProviderId.lastLoginAt = new Date();
     return issueSession(byProviderId, context);
   }
@@ -254,7 +262,7 @@ async function socialLogin(type, token, context = {}) {
   );
 
   if (byEmail) {
-    assertActive(byEmail);
+    assertCanSignIn(byEmail);
 
     byEmail.socialAccounts.push({
       provider: profile.provider,
@@ -269,7 +277,7 @@ async function socialLogin(type, token, context = {}) {
     // Signing in through a provider proves the address, so an account that
     // never completed email verification is confirmed by this.
     byEmail.emailVerifiedAt ??= new Date();
-    byEmail.avatarUrl ??= profile.avatarUrl ?? undefined;
+    byEmail.image ??= profile.avatarUrl ?? undefined;
     byEmail.lastLoginAt = new Date();
 
     logger.info(
@@ -287,7 +295,7 @@ async function socialLogin(type, token, context = {}) {
     email: profile.email,
     socialAccounts: [{ provider: profile.provider, providerId: profile.providerId }],
     authProviders: [profile.provider],
-    avatarUrl: profile.avatarUrl ?? undefined,
+    image: profile.avatarUrl ?? undefined,
     emailVerifiedAt: new Date(),
     lastLoginAt: new Date(),
   });
@@ -302,12 +310,19 @@ async function socialLogin(type, token, context = {}) {
   return issueSession(user, context);
 }
 
-function assertActive(user) {
-  if (!user.isActive) {
-    throw ApiError.forbidden("This account has been deactivated", {
-      code: "ACCOUNT_DISABLED",
-    });
-  }
+/**
+ * One place decides whether an account may hold a session, so a suspended and
+ * a deleted account cannot drift into being treated differently by accident.
+ */
+function assertCanSignIn(user) {
+  if (user.canSignIn()) return;
+
+  throw ApiError.forbidden(
+    user.status === USER_STATUS.DELETED
+      ? "This account no longer exists"
+      : "This account has been suspended",
+    { code: "ACCOUNT_DISABLED" }
+  );
 }
 
 function titleCase(value) {
@@ -337,9 +352,7 @@ async function login({ email, password }, context = {}) {
     throw ApiError.unauthorized("Invalid email or password", { code: "INVALID_CREDENTIALS" });
   }
 
-  if (!user.isActive) {
-    throw ApiError.forbidden("This account has been deactivated", { code: "ACCOUNT_DISABLED" });
-  }
+  assertCanSignIn(user);
 
   user.lastLoginAt = new Date();
 
@@ -363,7 +376,7 @@ async function refresh(refreshToken, context = {}) {
 
   const user = await User.findById(payload.sub).select("+tokenVersion +sessions");
 
-  if (!user || !user.isActive) {
+  if (!user || !user.canSignIn()) {
     throw ApiError.unauthorized("Session is no longer valid", { code: "SESSION_INVALID" });
   }
 
@@ -418,6 +431,97 @@ async function logoutAll(userId) {
   await user.save();
 }
 
+/**
+ * Step 1 of password recovery: email a single-use reset link.
+ *
+ * Returns nothing and never reveals whether the address exists - the same
+ * enumeration reasoning as login and signup. A caller who could tell "no
+ * account" from "email sent" would have a free membership oracle.
+ *
+ * A social-only account may reset too: they own the address, and the flow
+ * gives them a password to sign in with alongside Facebook or Google. That
+ * adds EMAIL to their providers rather than replacing anything.
+ */
+async function forgotPassword(email) {
+  const user = await User.findOne({ email }).select("+tokenVersion");
+
+  // Silent success for an unknown or deactivated account.
+  if (!user || !user.canSignIn()) return;
+
+  const { token, tokenHash } = createSecureToken();
+
+  user.passwordResetTokenHash = tokenHash;
+  user.passwordResetExpiresAt = new Date(
+    Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000
+  );
+
+  // Issuing a new link invalidates any previous one, because the stored hash
+  // is overwritten - so a forwarded older email stops working.
+  await user.save();
+
+  await sendMail({
+    to: user.email,
+    ...passwordResetEmail({ firstName: user.firstName, token }),
+  });
+}
+
+/**
+ * Step 2: consume the token and set the new password.
+ */
+async function resetPassword({ token, newPassword }) {
+  const tokenHash = hashToken(token);
+
+  const user = await User.findOne({ passwordResetTokenHash: tokenHash }).select(
+    "+password +tokenVersion +sessions +passwordResetTokenHash +passwordResetExpiresAt"
+  );
+
+  if (!user) {
+    throw ApiError.badRequest("This reset link is invalid or has already been used.", {
+      code: "RESET_TOKEN_INVALID",
+    });
+  }
+
+  // Checked explicitly rather than trusting a background sweep, so the window
+  // is exactly what the email advertised.
+  if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt.getTime() <= Date.now()) {
+    user.passwordResetTokenHash = undefined;
+    user.passwordResetExpiresAt = undefined;
+    await user.save();
+
+    throw ApiError.badRequest(
+      `This reset link has expired - links are valid for ${PASSWORD_RESET_TTL_MINUTES} minutes. Please request a new one.`,
+      { code: "RESET_TOKEN_EXPIRED" }
+    );
+  }
+
+  assertCanSignIn(user);
+
+  user.password = newPassword;
+
+  // Single use: clearing the hash is what makes a replayed link fail.
+  user.passwordResetTokenHash = undefined;
+  user.passwordResetExpiresAt = undefined;
+
+  // A reset is the usual response to a suspected compromise, so ending every
+  // other session is the entire point.
+  user.revokeAllSessions();
+
+  // A social-only account that sets a password gains EMAIL as a sign-in method.
+  if (!user.authProviders.includes(AUTH_PROVIDERS.EMAIL)) {
+    user.authProviders.push(AUTH_PROVIDERS.EMAIL);
+  }
+
+  await user.save();
+
+  // Sent on every change, not only user-initiated ones: this is the message
+  // that lets a victim notice a takeover. Non-fatal - the reset already
+  // succeeded, and failing the request now would be misleading.
+  await sendMail({
+    to: user.email,
+    ...passwordChangedEmail({ firstName: user.firstName }),
+  }).catch((error) => logger.error({ err: error }, "Failed to send password-changed notice"));
+}
+
 async function changePassword(userId, { currentPassword, newPassword }) {
   const user = await User.findById(userId).select("+password +tokenVersion +sessions");
 
@@ -446,10 +550,14 @@ async function changePassword(userId, { currentPassword, newPassword }) {
 
   // A password change must end sessions elsewhere - that is the whole point
   // of changing it after a suspected compromise.
-  user.tokenVersion += 1;
-  user.sessions = [];
+  user.revokeAllSessions();
 
   await user.save();
+
+  await sendMail({
+    to: user.email,
+    ...passwordChangedEmail({ firstName: user.firstName }),
+  }).catch((error) => logger.error({ err: error }, "Failed to send password-changed notice"));
 }
 
 /**
@@ -474,9 +582,10 @@ async function issueSession(user, { userAgent, ip } = {}) {
 
 /**
  * 32 random bytes, delivered raw in the email and stored only as a hash.
- * base64url keeps it URL-safe without percent-encoding.
+ * base64url keeps it URL-safe without percent-encoding. Shared by email
+ * verification and password reset - both are single-use emailed credentials.
  */
-function createVerificationToken() {
+function createSecureToken() {
   const token = crypto.randomBytes(32).toString("base64url");
   return { token, tokenHash: hashToken(token) };
 }
@@ -507,6 +616,8 @@ module.exports = {
   resendVerification,
   socialLogin,
   login,
+  forgotPassword,
+  resetPassword,
   refresh,
   logout,
   logoutAll,

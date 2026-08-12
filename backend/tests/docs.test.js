@@ -19,14 +19,16 @@ describe("OpenAPI spec", () => {
         "/auth/register",
         "/auth/verify-email",
         "/auth/resend-verification",
-        "/auth/facebook",
+        "/auth/social-login",
+        "/auth/providers",
         "/auth/login",
         "/auth/refresh",
         "/users/me",
+        "/users/create",
+        "/users/filter",
+        "/users/{id}",
+        "/users/{id}/permanent",
         "/users/{id}/role",
-        "/categories",
-        "/products",
-        "/products/{id}/stock",
       ])
     );
   });
@@ -62,11 +64,19 @@ describe("OpenAPI spec", () => {
     // `security: []` is the opt-out. Login must have it, or Swagger UI shows
     // a padlock and developers assume they need a token to sign in.
     expect(spec.paths["/auth/login"].post.security).toEqual([]);
-    expect(spec.paths["/products"].get.security).toEqual([]);
     // The whole signup flow runs before a token exists.
     expect(spec.paths["/auth/register"].post.security).toEqual([]);
     expect(spec.paths["/auth/verify-email"].post.security).toEqual([]);
     expect(spec.paths["/auth/resend-verification"].post.security).toEqual([]);
+    expect(spec.paths["/auth/social-login"].post.security).toEqual([]);
+  });
+
+  it("documents both social providers on the one endpoint", () => {
+    const type =
+      spec.paths["/auth/social-login"].post.requestBody.content["application/json"]
+        .schema.properties.type;
+
+    expect(type.enum).toEqual(["FACEBOOK", "GOOGLE"]);
   });
 
   it("documents the four roles", () => {

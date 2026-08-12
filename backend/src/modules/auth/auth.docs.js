@@ -392,6 +392,93 @@
  *             schema: { $ref: '#/components/schemas/SuccessResponse' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *
+  * /auth/forgot-password:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Request a password reset link
+ *     description: >
+ *       Emails a single-use reset link, valid for **10 minutes**. Issuing a new
+ *       link invalidates any previous one.
+ *
+ *
+ *       Always answers 200, whether or not the address has an account - a
+ *       different response would make this a free membership oracle, which
+ *       would undo the care taken over login and signup.
+ *
+ *
+ *       A social-only account may reset too: they own the address, and it
+ *       gives them a password to use alongside Google or Facebook. Limited to
+ *       5 requests per hour, since it sends mail to an address the caller names.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string, format: email, example: raju@example.com }
+ *     responses:
+ *       200:
+ *         description: Accepted. Says nothing about whether the address exists.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ *       429: { $ref: '#/components/responses/TooManyRequests' }
+ *
+ * /auth/reset-password:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Set a new password using an emailed token
+ *     description: >
+ *       Consumes the token from the reset email. The token is single use, and
+ *       only its SHA-256 hash is stored, so a database dump cannot be used to
+ *       seize accounts.
+ *
+ *
+ *       On success **every session is revoked** - a reset is the standard
+ *       response to a suspected compromise, so leaving other devices signed in
+ *       would defeat the purpose. A notification email is sent, which is what
+ *       lets a victim notice a takeover.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, newPassword]
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: The `token` query parameter from the emailed link.
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *                 description: At least 8 characters with an uppercase letter, a lowercase letter and a digit.
+ *                 example: BrandNewP4ss
+ *     responses:
+ *       200:
+ *         description: Password reset; all sessions signed out.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ *       400:
+ *         description: Token invalid, already used, or expired.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             example:
+ *               success: false
+ *               statusCode: 400
+ *               message: This reset link is invalid or has already been used.
+ *               code: RESET_TOKEN_INVALID
+ *               errors: []
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *       422: { $ref: '#/components/responses/ValidationError' }
+ *       429: { $ref: '#/components/responses/TooManyRequests' }
+ *
  * /auth/change-password:
  *   post:
  *     tags: [Auth]

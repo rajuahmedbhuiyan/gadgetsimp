@@ -77,6 +77,28 @@ router.post("/logout", authenticate, controller.logout);
 
 router.post("/logout-all", authenticate, controller.logoutAll);
 
+/* --------------------------- Password recovery --------------------------- */
+
+/**
+ * Both on the strictest tier. `forgot-password` sends mail to an address the
+ * caller names, so it is the obvious lever for spamming a third party's inbox;
+ * `reset-password` accepts a token that can take over an account, so unlimited
+ * attempts would let it be brute-forced.
+ */
+router.post(
+  "/forgot-password",
+  sensitiveLimiter,
+  validate(schemas.forgotPassword),
+  controller.forgotPassword
+);
+
+router.post(
+  "/reset-password",
+  sensitiveLimiter,
+  validate(schemas.resetPassword),
+  controller.resetPassword
+);
+
 router.post(
   "/change-password",
   sensitiveLimiter,

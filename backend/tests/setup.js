@@ -15,6 +15,17 @@
 
 process.env.NODE_ENV = "test";
 process.env.LOG_LEVEL = "silent";
+
+/**
+ * Forced, not defaulted with `??=`.
+ *
+ * A developer's `.env` legitimately carries real Gmail credentials, and
+ * dotenv would hand them straight to the suite. Every run would then send
+ * hundreds of real emails to fake addresses - burning the ~500/day quota,
+ * adding an SMTP round trip to every test, and eventually getting the account
+ * rate limited for everyone. Tests must never send mail.
+ */
+process.env.MAIL_PROVIDER = "log";
 process.env.MONGODB_URI ??= "mongodb://127.0.0.1:27017/gadgetsimp-test";
 process.env.JWT_ACCESS_SECRET ??= "test-access-secret-that-is-long-enough-000000";
 process.env.JWT_REFRESH_SECRET ??= "test-refresh-secret-that-is-long-enough-00000";

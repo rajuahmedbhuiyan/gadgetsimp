@@ -1,37 +1,41 @@
 "use strict";
 
 const env = require("../../config/env");
-const { EMAIL_VERIFICATION_TTL_MINUTES, BRAND } = require("../../shared/constants");
+const {
+  EMAIL_VERIFICATION_TTL_MINUTES,
+  PASSWORD_RESET_TTL_MINUTES,
+} = require("../../shared/constants");
+const {
+  layout,
+  button,
+  fallbackLink,
+  paragraph: p,
+  mutedParagraph: pMuted,
+} = require("../../shared/emailLayout");
 
 /**
- * Transactional email bodies.
+ * Transactional email for the auth flows. The client-proof chrome lives in
+ * `shared/emailLayout.js`; this file is only the wording.
  *
- * Email HTML is not web HTML. Outlook renders through Word, Gmail strips
- * <style> blocks and anything it does not recognise, and there is no reliable
- * flexbox, grid, or CSS cascade. So this file deliberately uses the old
- * techniques that still work everywhere:
- *
- *   - tables for layout, not divs;
- *   - inline styles on every element, since <style> is discarded;
- *   - a bulletproof VML fallback so the call-to-action renders as a real
- *     button in Outlook rather than a bare link;
- *   - a text/plain part on every message, because HTML-only mail scores badly
- *     with spam filters and some clients refuse to render it.
- *
- * Buttons are dark ink on the amber brand colour, not white. White on
- * #febc01 measures 1.69:1 against WCAG's 4.5:1 minimum - it looks washed out
- * on a good screen and is unreadable on a bad one.
+ * Every message ships a text/plain part as well as HTML - some clients refuse
+ * to render HTML-only mail, and spam filters score it down.
  */
+
+const appUrl = () => env.APP_URL.replace(/\/$/, "");
 
 function verificationUrl(token) {
   // Points at the frontend, which reads the token and calls the API. Emailing
   // an API endpoint directly would leave the user staring at raw JSON.
-  return `${env.APP_URL.replace(/\/$/, "")}/verify-email?token=${encodeURIComponent(token)}`;
+  return `${appUrl()}/verify-email?token=${encodeURIComponent(token)}`;
+}
+
+function resetUrl(token) {
+  return `${appUrl()}/reset-password?token=${encodeURIComponent(token)}`;
 }
 
 /**
- * Renders the TTL the way a person would say it, so a 10-minute window does
- * not round to "0 hours".
+ * Renders a TTL the way a person would say it, so a 10-minute window does not
+ * round to "0 hours".
  */
 function formatDuration(minutes) {
   if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
@@ -70,7 +74,7 @@ function verificationEmail({ firstName, token }) {
         ${button({ url, label: "Confirm email address" })}
         <p style="${pMuted}">
           This link is valid for ${validFor}.
-          <strong style="color:${BRAND.INK};">Your account is not created until you confirm.</strong>
+          <strong style="color:#1a1a1a;">Your account is not created until you confirm.</strong>
         </p>
         ${fallbackLink(url)}
       `,
@@ -108,7 +112,7 @@ function welcomeEmail({ firstName }) {
 }
 
 function existingAccountEmail({ firstName }) {
-  const loginUrl = `${env.APP_URL.replace(/\/$/, "")}/login`;
+  const loginUrl = `${appUrl()}/login`;
 
   return {
     subject: "Someone tried to sign up with your email",
@@ -144,126 +148,95 @@ function existingAccountEmail({ firstName }) {
   };
 }
 
-/* ------------------------------- building blocks ------------------------- */
+function passwordResetEmail({ firstName, token }) {
+  const url = resetUrl(token);
+  const validFor = formatDuration(PASSWORD_RESET_TTL_MINUTES);
 
-const p = `margin:0 0 16px;font-size:16px;line-height:1.6;color:${BRAND.INK};`;
-const pMuted = `margin:0 0 16px;font-size:14px;line-height:1.6;color:${BRAND.MUTED};`;
+  return {
+    subject: "Reset your GadgetSimp password",
+    text: [
+      `Hi ${firstName},`,
+      "",
+      "We received a request to reset your GadgetSimp password. Use this link:",
+      "",
+      url,
+      "",
+      `The link is valid for ${validFor} and can only be used once.`,
+      "",
+      "If you did not request this, you can ignore this email - your password",
+      "has not changed, and nobody can reset it without this link.",
+      "",
+      "- The GadgetSimp team",
+    ].join("\n"),
+    html: layout({
+      preheader: `Reset your password. Link valid for ${validFor}.`,
+      heading: `Hi ${firstName}, reset your password`,
+      body: `
+        <p style="${p}">
+          We received a request to reset the password on your GadgetSimp account.
+        </p>
+        ${button({ url, label: "Choose a new password" })}
+        <p style="${pMuted}">
+          This link is valid for ${validFor} and can only be used once.
+        </p>
+        ${fallbackLink(url)}
+      `,
+      footerNote:
+        "If you did not request this, ignore this email. Your password has not changed, and nobody can reset it without this link.",
+    }),
+  };
+}
 
 /**
- * A call-to-action that survives Outlook.
- *
- * Outlook ignores padding on <a>, collapsing the button to plain text. The
- * MSO conditional wraps a VML rounded rectangle that Outlook draws instead,
- * while every other client ignores the comment and uses the anchor.
+ * Sent after a password actually changes. This is the message that lets a
+ * victim notice an account takeover, so it goes out on every change - not
+ * only the ones the user initiated.
  */
-function button({ url, label }) {
-  return `
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0;">
-    <tr>
-      <td align="center" bgcolor="${BRAND.PRIMARY}" style="border-radius:8px;">
-        <!--[if mso]>
-        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
-          href="${url}" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="17%"
-          strokecolor="${BRAND.PRIMARY_DARK}" fillcolor="${BRAND.PRIMARY}">
-          <w:anchorlock/>
-          <center style="color:${BRAND.INK};font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">${label}</center>
-        </v:roundrect>
-        <![endif]-->
-        <!--[if !mso]><!-- -->
-        <a href="${url}"
-           style="display:inline-block;padding:14px 32px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-                  font-size:16px;font-weight:700;color:${BRAND.INK};text-decoration:none;border-radius:8px;
-                  background-color:${BRAND.PRIMARY};">${label}</a>
-        <!--<![endif]-->
-      </td>
-    </tr>
-  </table>`;
-}
+function passwordChangedEmail({ firstName }) {
+  const loginUrl = `${appUrl()}/login`;
 
-// Buttons get blocked or stripped often enough that the raw URL has to be
-// present too, or the user is simply stuck.
-function fallbackLink(url) {
-  return `
-  <p style="${pMuted}">
-    If the button does not work, copy this into your browser:<br>
-    <a href="${url}" style="color:${BRAND.PRIMARY_DARK};word-break:break-all;">${url}</a>
-  </p>`;
-}
-
-function layout({ preheader, heading, body, footerNote }) {
-  return `<!doctype html>
-<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="x-apple-disable-message-reformatting">
-  <!-- Transactional mail is a fixed light design; opting out stops iOS and
-       Outlook dark modes from inverting the amber into something muddy. -->
-  <meta name="color-scheme" content="light">
-  <meta name="supported-color-schemes" content="light">
-  <title>${heading}</title>
-</head>
-<body style="margin:0;padding:0;background-color:${BRAND.BACKGROUND};-webkit-font-smoothing:antialiased;">
-
-  <!-- Preheader: the grey preview line beside the subject in most inboxes.
-       Hidden in the body itself, then padded so no other copy leaks into it. -->
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">
-    ${preheader}${"&#847;&zwnj;&nbsp;".repeat(60)}
-  </div>
-
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-         style="background-color:${BRAND.BACKGROUND};">
-    <tr>
-      <td align="center" style="padding:32px 16px;">
-
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-               style="max-width:560px;background-color:${BRAND.SURFACE};border-radius:14px;overflow:hidden;
-                      border:1px solid ${BRAND.BORDER};">
-
-          <!-- Brand bar -->
-          <tr>
-            <td style="background-color:${BRAND.PRIMARY};padding:22px 32px;">
-              <span style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-                           font-size:22px;font-weight:800;letter-spacing:-0.3px;color:${BRAND.INK};">
-                GadgetSimp
-              </span>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:32px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
-              <h1 style="margin:0 0 16px;font-size:20px;line-height:1.35;font-weight:700;color:${BRAND.INK};">
-                ${heading}
-              </h1>
-              ${body}
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:20px 32px 28px;border-top:1px solid ${BRAND.BORDER};
-                       font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
-              <p style="margin:0;font-size:13px;line-height:1.6;color:${BRAND.MUTED};">
-                ${footerNote}
-              </p>
-            </td>
-          </tr>
-        </table>
-
-        <p style="margin:20px 0 0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-                  font-size:12px;color:${BRAND.MUTED};">
-          &copy; ${new Date().getFullYear()} GadgetSimp
+  return {
+    subject: "Your GadgetSimp password was changed",
+    text: [
+      `Hi ${firstName},`,
+      "",
+      "Your GadgetSimp password has just been changed, and every device has",
+      "been signed out.",
+      "",
+      "If this was you, no action is needed - just sign in again:",
+      loginUrl,
+      "",
+      "If this was NOT you, reset your password immediately using the",
+      "'Forgot password' link, and contact support.",
+      "",
+      "- The GadgetSimp team",
+    ].join("\n"),
+    html: layout({
+      preheader: "Your password was changed and all devices were signed out.",
+      heading: `Hi ${firstName}, your password was changed`,
+      body: `
+        <p style="${p}">
+          Your GadgetSimp password has just been changed, and every device has
+          been signed out.
         </p>
-
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+        ${button({ url: loginUrl, label: "Sign in again" })}
+        <p style="${pMuted}">
+          <strong style="color:#1a1a1a;">If this was not you</strong>, reset your
+          password immediately using the "Forgot password" link, and contact support.
+        </p>
+      `,
+      footerNote: "You are receiving this because your account's password changed.",
+    }),
+  };
 }
 
 module.exports = {
   verificationEmail,
   welcomeEmail,
   existingAccountEmail,
+  passwordResetEmail,
+  passwordChangedEmail,
   verificationUrl,
+  resetUrl,
+  formatDuration,
 };
