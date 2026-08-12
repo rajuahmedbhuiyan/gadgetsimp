@@ -25,7 +25,7 @@ describe("POST /auth/login", () => {
     expect(user).not.toHaveProperty("tokenVersion");
   });
 
-  it("delivers the refresh token as an httpOnly cookie, not in the body", async () => {
+  it("delivers the refresh token as an httpOnly cookie", async () => {
     const email = uniqueEmail("cookie");
     await createUserAndLogin(app, { email });
 
@@ -37,8 +37,15 @@ describe("POST /auth/login", () => {
       value.startsWith(REFRESH_COOKIE_NAME)
     );
 
+    // HttpOnly is the part that matters: JavaScript cannot read this, so an
+    // XSS on the storefront cannot steal it. A browser client should use the
+    // cookie and ignore the copy in the body.
     expect(cookie).toContain("HttpOnly");
-    expect(JSON.stringify(response.body)).not.toContain("refreshToken");
+    expect(cookie).toContain("Path=/api/v1/auth");
+
+    // The body copy is the same token, for clients that cannot hold cookies.
+    const fromCookie = decodeURIComponent(cookie.split(";")[0].split("=")[1]);
+    expect(response.body.data.refreshToken).toBe(fromCookie);
   });
 
   it("gives the same response for an unknown email and a wrong password", async () => {
@@ -222,5 +229,124 @@ describe("input hardening", () => {
 
     expect(response.status).toBe(404);
     expect(response.body).toMatchObject({ success: false, code: "ROUTE_NOT_FOUND" });
+  });
+});
+
+describe("access token claims", () => {
+  /** JWTs are signed, not encrypted - the payload is plain base64. */
+  function decode(token) {
+    return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+  }
+
+  it("carries identity a frontend can render without another round trip", async () => {
+    const email = uniqueEmail("claims");
+    await User.create({
+      firstName: "Raju",
+      lastName: "Ahmed",
+      email,
+      password: "Passw0rd!",
+      phone: "+8801602817341",
+      emailVerifiedAt: new Date(),
+    });
+
+    const login = await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email, password: "Passw0rd!" });
+
+    expect(decode(login.body.data.accessToken)).toMatchObject({
+      sub: expect.any(String),
+      role: "ROLE_CUSTOMER",
+      firstName: "Raju",
+      lastName: "Ahmed",
+      email,
+      phone: "+8801602817341",
+    });
+  });
+
+  it("uses null rather than omitting an absent phone", async () => {
+    const { accessToken } = await createUserAndLogin(app);
+
+    expect(decode(accessToken).phone).toBeNull();
+  });
+
+  it("still carries tokenVersion, which is what actually revokes it", async () => {
+    const { accessToken } = await createUserAndLogin(app);
+
+    expect(decode(accessToken).tokenVersion).toBe(0);
+  });
+
+  it("does not carry the password hash or reset token", async () => {
+    const { accessToken } = await createUserAndLogin(app);
+    const payload = decode(accessToken);
+
+    // The payload is world-readable, so this is worth asserting.
+    expect(payload).not.toHaveProperty("password");
+    expect(payload).not.toHaveProperty("passwordResetTokenHash");
+  });
+
+  it("is not trusted for authorisation - the database is", async () => {
+    const { authHeader, email } = await createUserAndLogin(app);
+
+    // Promote the user behind the token's back. The stale claim says customer.
+    await User.updateOne({ email }, { role: "ROLE_ADMIN" });
+
+    const response = await request(app).get(`${API}/auth/me`).set("Authorization", authHeader);
+
+    // `authenticate` re-reads the user, so the fresh role wins over the claim.
+    expect(response.body.data.user.role).toBe("ROLE_ADMIN");
+  });
+});
+
+describe("refresh token delivery", () => {
+  it("comes back in the body as well as the cookie", async () => {
+    const email = uniqueEmail("bodytoken");
+    await createUserAndLogin(app, { email });
+
+    const login = await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email, password: "Passw0rd!" });
+
+    expect(login.body.data.refreshToken).toEqual(expect.any(String));
+    expect(
+      login.headers["set-cookie"].some((value) => value.startsWith(REFRESH_COOKIE_NAME))
+    ).toBe(true);
+  });
+
+  it("the body token works on /auth/refresh without any cookie", async () => {
+    const email = uniqueEmail("nocookie");
+    await createUserAndLogin(app, { email });
+
+    const login = await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email, password: "Passw0rd!" });
+
+    // No Cookie header at all - the path a native app or CLI takes.
+    const refreshed = await request(app)
+      .post(`${API}/auth/refresh`)
+      .send({ refreshToken: login.body.data.refreshToken });
+
+    expect(refreshed.status).toBe(200);
+    expect(refreshed.body.data.accessToken).toEqual(expect.any(String));
+    expect(refreshed.body.data.refreshToken).not.toBe(login.body.data.refreshToken);
+  });
+
+  it("rotation still applies to a body-delivered token", async () => {
+    const email = uniqueEmail("bodyrotate");
+    await createUserAndLogin(app, { email });
+
+    const login = await request(app)
+      .post(`${API}/auth/login`)
+      .send({ email, password: "Passw0rd!" });
+    const original = login.body.data.refreshToken;
+
+    await request(app).post(`${API}/auth/refresh`).send({ refreshToken: original });
+
+    // Replaying it is still treated as theft.
+    const replay = await request(app)
+      .post(`${API}/auth/refresh`)
+      .send({ refreshToken: original });
+
+    expect(replay.status).toBe(401);
+    expect(replay.body.code).toBe("REFRESH_TOKEN_REUSED");
   });
 });

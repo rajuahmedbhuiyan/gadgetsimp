@@ -139,9 +139,27 @@
  *         accessToken:
  *           type: string
  *           description: >
- *             Short-lived JWT. Send as `Authorization: Bearer <token>`.
- *             The matching refresh token is delivered as an httpOnly cookie
- *             and is never present in the body.
+ *             Short-lived JWT (15 min). Send as `Authorization: Bearer <token>`.
+ *
+ *             Its payload carries `sub`, `role`, `tokenVersion`, `firstName`,
+ *             `lastName`, `email` and `phone` - a convenience copy so a
+ *             frontend can render a header without calling `/auth/me`. Two
+ *             caveats: a JWT is signed, not encrypted, so anyone holding it
+ *             can read those values; and they are a snapshot that can go stale
+ *             within the token's lifetime. Nothing server-side trusts them -
+ *             every request re-reads the user from the database.
+ *           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *         refreshToken:
+ *           type: string
+ *           description: >
+ *             Long-lived token (30 days), **also** delivered as an httpOnly
+ *             cookie. Present in the body only when `REFRESH_TOKEN_IN_BODY` is
+ *             enabled, for clients that cannot hold cookies - a native app, a
+ *             CLI, Postman.
+ *
+ *             A browser should use the cookie and ignore this field: a token
+ *             JavaScript can read is a token XSS can steal, which is precisely
+ *             what the httpOnly cookie prevents.
  *           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
  *
  *   parameters:

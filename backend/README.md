@@ -3,7 +3,7 @@
 Express 5 + MongoDB backend for the GadgetSimp storefront. Modular monolith,
 tiered rate limiting, OpenAPI docs generated from the code.
 
-**Implemented:** auth, users.
+**Implemented:** auth, users, media.
 **Not yet built:** catalog (categories, products), cart, orders, reviews —
 each drops in as one folder under `src/modules/` plus one line in
 `src/routes/index.js`.
@@ -32,7 +32,7 @@ ids from 1000):
 | `customer@gadgetsimp.dev` | `Customer1234` | `ROLE_CUSTOMER` |
 
 ```bash
-npm test              # 230 tests, in-memory MongoDB, no external services
+npm test              # 280 tests, in-memory MongoDB, no external services
 npm run docs:export   # write openapi.json for client generation / CI diffing
 ```
 
@@ -319,6 +319,65 @@ verification and choosing the role, is the most privileged write in the API.
 > the stronger shape is to email a one-time *set your password* link instead,
 > reusing that token machinery. Small change, worth making before launch.
 
+### Media uploads
+
+```
+POST   /media/upload   multipart/form-data, field "file"  — any signed-in role
+POST   /media/my       filter body, pagination            — your own uploads
+POST   /media/filter   filter body, pagination            — ROLE_ADMIN and above
+DELETE /media/{id}                                        — ROLE_ADMIN and above
+```
+
+Cloudinary-backed, **3MB maximum**. The cap is enforced while the request
+streams, so an oversized upload is rejected without ever being buffered — the
+difference between a cheap 413 and a way to exhaust the process.
+
+**Everything is converted to WebP before storage** ([`imageProcessor.js`](src/shared/imageProcessor.js)),
+quality 80, capped at 2000px on the longest edge (downscale only). Measured:
+
+| Input | Stored | Saving |
+| --- | --- | --- |
+| photo-like JPEG 1600×1200 | 1545KB → 1197KB | −23% |
+| flat PNG 1600×1200 | 28KB → 3KB | −88% |
+| oversized JPEG 3000×2250 | 4941KB → 1734KB | −65% (also resized to 2000×1500) |
+
+Animated GIFs become animated WebP rather than being flattened. `originalFormat`
+and `originalBytes` are kept on the record so the saving stays visible.
+
+Size is the obvious win, but re-encoding buys two things that matter more:
+
+- **It is the real file-type check.** A `Content-Type` is client-supplied and
+  forged in a second. Decoding the bytes is the only way to know a file is an
+  image; anything undecodable is rejected with `400 INVALID_IMAGE` before
+  storage.
+- **It strips everything that isn't pixels** — EXIF included, which routinely
+  carries the GPS coordinates of where a photo was taken, handed over by users
+  who have no idea it's in there. It also destroys any payload smuggled into
+  metadata or trailing bytes, which is what makes polyglot files work. EXIF
+  *orientation* is applied to the pixels first, so sideways photos stay
+  upright.
+
+- **Uploads go through the API, not straight from the browser.** Direct-to-CDN
+  is cheaper in bandwidth but hands the client an upload credential and trusts
+  whatever it reports back, which makes the size cap, type check and ownership
+  record advisory. The API secret never leaves the server.
+- **Allowed types are an explicit list**, not `image/*` — that wildcard admits
+  SVG, a document format that can carry script and becomes stored XSS when
+  served from your own domain. The declared Content-Type is only a first pass;
+  Cloudinary decodes the file and rejects anything that isn't the image it
+  claims to be.
+- **Ordering is deliberate on both writes.** Upload goes to Cloudinary first,
+  then the row — a row pointing at nothing is worse than no row. If the write
+  fails the asset is deleted again, so a failure never strands a file accruing
+  storage cost. Delete is the mirror: Cloudinary first, then the row, so a
+  provider failure leaves both sides intact and retryable.
+- `/media/my` pins the uploader from the token, and `uploadedBy` isn't in that
+  schema at all — sending it is a 422 rather than something that looks like it
+  might work.
+
+Unconfigured Cloudinary answers **503 `MEDIA_NOT_CONFIGURED`**; a partial
+config is refused at boot.
+
 ### Roles
 
 `ROLE_CUSTOMER` < `ROLE_MODERATOR` < `ROLE_ADMIN` < `ROLE_OWNER`
@@ -336,7 +395,21 @@ owners. The last owner cannot be demoted or deactivated.
 ### Sessions
 
 Access token (15 min, `Authorization: Bearer`) + refresh token (30 days,
-httpOnly cookie, rotated on every use).
+rotated on every use).
+
+The access token's payload carries `sub`, `role`, `tokenVersion`, `firstName`,
+`lastName`, `email` and `phone` — a convenience copy so a frontend can render a
+header without calling `/auth/me`. It is a **snapshot, not an authority**: a JWT
+is signed but not encrypted (anyone holding it can read those values), and the
+claims can go stale within the 15-minute window. Nothing server-side trusts
+them — `authenticate` re-reads the user from the database on every request.
+
+The refresh token goes out **as an httpOnly cookie and in the response body**
+(`REFRESH_TOKEN_IN_BODY`, default on). `/auth/refresh` accepts either, cookie
+first. Browsers should use the cookie and ignore the body field — a token
+JavaScript can read is a token XSS can steal, which is exactly what httpOnly
+prevents. The body copy exists for clients that cannot hold cookies: a native
+app, a CLI, Postman. Set `REFRESH_TOKEN_IN_BODY=false` for a web-only deploy.
 
 - Only the **SHA-256 hash** of a refresh token is stored — a database dump
   yields no usable sessions.

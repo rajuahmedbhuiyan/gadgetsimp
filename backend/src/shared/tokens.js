@@ -28,9 +28,35 @@ function subjectOf(user) {
   return String(user.id ?? user._id);
 }
 
+/**
+ * Mints an access token.
+ *
+ * The identity claims below are a **convenience copy for the client**, not an
+ * authorisation input. Two things follow from that, and both matter:
+ *
+ *   - **They can be stale.** A token is valid for 15 minutes, so a name or
+ *     phone changed in that window is out of date inside the token. That is
+ *     harmless here only because `authenticate` re-reads the user from the
+ *     database on every request and `req.user` comes from there - nothing
+ *     server-side trusts these values.
+ *   - **They are readable by anyone holding the token.** A JWT is signed, not
+ *     encrypted: the payload is plain base64. So this is fine for a name and
+ *     role, and is the reason nothing sensitive beyond contact details goes in.
+ */
 function signAccessToken(user) {
   return jwt.sign(
-    { sub: subjectOf(user), role: user.role, tokenVersion: user.tokenVersion },
+    {
+      sub: subjectOf(user),
+      role: user.role,
+      tokenVersion: user.tokenVersion,
+
+      // Client-facing identity, so a frontend can render a header without a
+      // round trip to /auth/me on every page load.
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone ?? null,
+    },
     env.JWT_ACCESS_SECRET,
     {
       expiresIn: env.JWT_ACCESS_EXPIRES_IN,

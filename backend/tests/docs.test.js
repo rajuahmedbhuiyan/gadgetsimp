@@ -29,6 +29,10 @@ describe("OpenAPI spec", () => {
         "/users/{id}",
         "/users/{id}/permanent",
         "/users/{id}/role",
+        "/media/upload",
+        "/media/my",
+        "/media/filter",
+        "/media/{id}",
       ])
     );
   });

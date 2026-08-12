@@ -345,11 +345,22 @@
  *     tags: [Auth]
  *     summary: Rotate the session and get a fresh access token
  *     description: >
- *       Reads the `gs_refresh_token` cookie, invalidates it and issues a new
- *       pair. Presenting a refresh token that was already rotated is treated
+ *       Reads the `gs_refresh_token` cookie - or, for a client that cannot hold
+ *       cookies, a `refreshToken` in the body - invalidates it and issues a new
+ *       pair. The cookie wins if both are sent. Presenting a refresh token that was already rotated is treated
  *       as theft: every session for that user is terminated and the response
  *       is 401 `REFRESH_TOKEN_REUSED`.
  *     security: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: Only needed by clients that cannot send the cookie.
  *     responses:
  *       200:
  *         description: New access token issued and refresh cookie rotated.

@@ -4,6 +4,26 @@ const authService = require("./auth.service");
 const { sendResponse } = require("../../shared/sendResponse");
 const { refreshCookieOptions, REFRESH_COOKIE_NAME } = require("../../shared/tokens");
 const { configuredProviders } = require("./providers");
+const env = require("../../config/env");
+
+/**
+ * Builds the auth payload, and sets the refresh cookie as a side effect.
+ *
+ * The refresh token always goes out as an httpOnly cookie - that is the path
+ * a browser should use, because JavaScript cannot read it and therefore XSS
+ * cannot steal it. It is *additionally* placed in the body when
+ * REFRESH_TOKEN_IN_BODY is on, for clients that cannot hold cookies at all
+ * (native apps, CLIs, Postman) and for visibility while developing.
+ */
+function issue(res, { user, accessToken, refreshToken }) {
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
+
+  return {
+    user,
+    accessToken,
+    ...(env.REFRESH_TOKEN_IN_BODY ? { refreshToken } : {}),
+  };
+}
 
 /**
  * Controllers are intentionally thin: read the validated input, call the
@@ -11,9 +31,8 @@ const { configuredProviders } = require("./providers");
  * try/catch - Express 5 forwards a rejected promise to the error handler on
  * its own.
  *
- * The refresh token is set as an httpOnly cookie here rather than returned in
- * the body. HTTP concerns like cookies belong to this layer; the service just
- * hands back a token string.
+ * Cookies are handled here rather than in the service: HTTP concerns belong to
+ * this layer, and the service just hands back a token string.
  */
 
 function requestContext(req) {
@@ -48,12 +67,10 @@ async function verifyEmail(req, res) {
     requestContext(req)
   );
 
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
-
   return sendResponse(res, {
     statusCode: 201,
     message: "Email confirmed and account created",
-    data: { user, accessToken },
+    data: issue(res, { user, accessToken, refreshToken }),
   });
 }
 
@@ -80,11 +97,9 @@ async function socialLogin(req, res) {
     requestContext(req)
   );
 
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
-
   return sendResponse(res, {
     message: `Signed in with ${type.charAt(0)}${type.slice(1).toLowerCase()}`,
-    data: { user, accessToken },
+    data: issue(res, { user, accessToken, refreshToken }),
   });
 }
 
@@ -105,32 +120,39 @@ async function login(req, res) {
     requestContext(req)
   );
 
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
-
   return sendResponse(res, {
     message: "Signed in successfully",
-    data: { user, accessToken },
+    data: issue(res, { user, accessToken, refreshToken }),
   });
 }
 
+/**
+ * Cookie first, body second.
+ *
+ * A browser sends the cookie automatically and should keep using it. A client
+ * that cannot hold cookies has nowhere to put one, so it may present the token
+ * it was given in the body instead - otherwise returning it there would be
+ * pointless. The cookie takes precedence when both arrive.
+ */
 async function refresh(req, res) {
-  const presented = req.cookies?.[REFRESH_COOKIE_NAME];
+  const presented = req.cookies?.[REFRESH_COOKIE_NAME] ?? req.body?.refreshToken;
 
   const { user, accessToken, refreshToken } = await authService.refresh(
     presented,
     requestContext(req)
   );
 
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
-
   return sendResponse(res, {
     message: "Session refreshed",
-    data: { user, accessToken },
+    data: issue(res, { user, accessToken, refreshToken }),
   });
 }
 
 async function logout(req, res) {
-  await authService.logout(req.cookies?.[REFRESH_COOKIE_NAME], req.user.id);
+  await authService.logout(
+    req.cookies?.[REFRESH_COOKIE_NAME] ?? req.body?.refreshToken,
+    req.user.id
+  );
 
   // Same options minus maxAge, otherwise the browser will not match and clear it.
   const { maxAge, ...clearOptions } = refreshCookieOptions();

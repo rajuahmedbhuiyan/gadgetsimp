@@ -90,6 +90,25 @@ const envSchema = z.object({
    */
   COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("lax"),
 
+  /**
+   * Also return the refresh token in the JSON body, not only as the httpOnly
+   * cookie.
+   *
+   * Needed by any client that cannot hold cookies - a native mobile app, a
+   * CLI, Postman - and convenient while developing, where the cookie is
+   * invisible in a response viewer.
+   *
+   * The cost is real: a token in the body is a token JavaScript can read, so
+   * an XSS on the storefront can exfiltrate it, which is exactly what the
+   * httpOnly cookie exists to prevent. The cookie is still set either way, so
+   * a browser client should keep using it and ignore the body field. Set this
+   * to false for a web-only deployment.
+   */
+  REFRESH_TOKEN_IN_BODY: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+
   // Where the verification link points - the frontend, not the API.
   APP_URL: z.url("APP_URL must be a valid URL").default("http://localhost:3000"),
 
@@ -139,6 +158,39 @@ const envSchema = z.object({
    * no client secret is involved.
    */
   GOOGLE_CLIENT_ID: z.string().optional(),
+
+  /**
+   * Cloudinary, for media uploads. All three come from the dashboard and must
+   * be set together - like the social providers, an unconfigured integration
+   * reports itself rather than failing mid-request.
+   *
+   * The API secret signs upload requests, so it stays server-side.
+   */
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
+
+  // Where uploads land in the Cloudinary media library. Keeping them under one
+  // folder makes the account browsable and the assets easy to purge.
+  CLOUDINARY_FOLDER: z.string().default("gadgetsimp"),
+
+  /**
+   * WebP encode quality, 1-100. Every upload is re-encoded to WebP before
+   * storage - see shared/imageProcessor.js.
+   *
+   * 80 is the usual sweet spot: visually indistinguishable from the original
+   * for photographs while cutting size substantially. Above ~90 the file grows
+   * fast for differences nobody can see; below ~60 artefacts start showing on
+   * flat colour and text.
+   */
+  MEDIA_WEBP_QUALITY: z.coerce.number().int().min(1).max(100).default(80),
+
+  /**
+   * Longest edge, in pixels. Larger images are scaled down, never up.
+   * 2000px covers full-bleed hero images on a retina display; a 6000px phone
+   * photo stored at full size is bytes nobody will ever see.
+   */
+  MEDIA_MAX_DIMENSION: z.coerce.number().int().min(64).max(8000).default(2000),
 
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
@@ -218,6 +270,25 @@ const envSchema = z.object({
         path: ["COOKIE_SAMESITE"],
         message:
           "'none' requires HTTPS (Secure), so it only works in production - use 'lax' locally",
+      });
+    }
+
+    // All three Cloudinary values or none - two out of three cannot sign an
+    // upload, and a partial config looks configured right up until someone
+    // tries to upload.
+    const cloudinaryValues = [
+      config.CLOUDINARY_CLOUD_NAME,
+      config.CLOUDINARY_API_KEY,
+      config.CLOUDINARY_API_SECRET,
+    ];
+    const cloudinarySet = cloudinaryValues.filter(Boolean).length;
+
+    if (cloudinarySet !== 0 && cloudinarySet !== cloudinaryValues.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["CLOUDINARY_CLOUD_NAME"],
+        message:
+          "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET must be set together",
       });
     }
 

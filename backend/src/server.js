@@ -5,6 +5,7 @@ const logger = require("./config/logger");
 const { connectDatabase, disconnectDatabase, ensureIndexes } = require("./config/database");
 const { disconnectRedis } = require("./config/redis");
 const { verifyMailer, closeMailer } = require("./config/mailer");
+const { verifyCloudinary } = require("./config/cloudinary");
 const createApp = require("./app");
 
 /**
@@ -28,6 +29,13 @@ async function start() {
   // otherwise surface as a failed registration for a real user.
   await verifyMailer().catch((error) => {
     logger.error({ err: error }, "SMTP verification failed - signup emails will not send");
+  });
+
+  // Same reasoning: bad Cloudinary credentials should surface here rather than
+  // as a failed upload for a real user. Non-fatal, because the rest of the API
+  // works fine without media.
+  await verifyCloudinary().catch((error) => {
+    logger.error({ err: error }, "Cloudinary verification failed - uploads will not work");
   });
 
   const server = app.listen(env.PORT, () => {

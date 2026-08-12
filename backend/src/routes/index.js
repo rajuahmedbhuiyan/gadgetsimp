@@ -4,6 +4,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const authRoutes = require("../modules/auth/auth.routes");
 const userRoutes = require("../modules/user/user.routes");
+const mediaRoutes = require("../modules/media/media.routes");
 const { sendResponse } = require("../shared/sendResponse");
 
 const router = express.Router();
@@ -18,6 +19,7 @@ const router = express.Router();
 const modules = [
   { path: "/auth", router: authRoutes },
   { path: "/users", router: userRoutes },
+  { path: "/media", router: mediaRoutes },
 ];
 
 /**

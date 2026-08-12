@@ -126,6 +126,34 @@ const SOCIAL_PROVIDERS = Object.freeze(
   AUTH_PROVIDER_VALUES.filter((provider) => provider !== AUTH_PROVIDERS.EMAIL)
 );
 
+/**
+ * Media uploads.
+ *
+ * The size cap is enforced twice: multer aborts the stream once the limit is
+ * passed, so an oversized body is never fully buffered, and the service checks
+ * again before calling Cloudinary. The MIME allow-list is a list rather than a
+ * `image/*` wildcard because "starts with image/" happily admits SVG, which is
+ * a document format that can carry script and is a stored-XSS vector when
+ * served back from your own domain.
+ */
+const MEDIA = Object.freeze({
+  MAX_BYTES: 3 * 1024 * 1024, // 3 MB
+  MAX_FILES_PER_REQUEST: 1,
+  ALLOWED_MIME_TYPES: Object.freeze([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/avif",
+  ]),
+});
+
+const MEDIA_TYPE = Object.freeze({
+  IMAGE: "IMAGE",
+});
+
+const MEDIA_TYPE_VALUES = Object.freeze(Object.values(MEDIA_TYPE));
+
 const REFRESH_COOKIE_NAME = "gs_refresh_token";
 
 /**
@@ -162,6 +190,9 @@ module.exports = {
   AUTH_PROVIDERS,
   AUTH_PROVIDER_VALUES,
   SOCIAL_PROVIDERS,
+  MEDIA,
+  MEDIA_TYPE,
+  MEDIA_TYPE_VALUES,
   REFRESH_COOKIE_NAME,
   EMAIL_VERIFICATION_TTL_MINUTES,
   PASSWORD_RESET_TTL_MINUTES,

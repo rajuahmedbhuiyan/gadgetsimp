@@ -52,6 +52,7 @@ const definition = {
     { name: "Health", description: "Liveness and readiness probes" },
     { name: "Auth", description: "Registration, login, token rotation, logout" },
     { name: "Users", description: "Profile management and admin user administration" },
+    { name: "Media", description: "Cloudinary-backed file uploads" },
   ],
   components: {
     securitySchemes: {
