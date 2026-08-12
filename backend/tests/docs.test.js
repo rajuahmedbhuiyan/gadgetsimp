@@ -89,8 +89,8 @@ describe("OpenAPI spec", () => {
     expect(spec.paths["/auth/verify-email"].post.security).toEqual([]);
     expect(spec.paths["/auth/resend-verification"].post.security).toEqual([]);
     expect(spec.paths["/auth/social-login"].post.security).toEqual([]);
-    expect(spec.paths["/products/filter"].post.security).toEqual([]);
     expect(spec.paths["/products/filter-options"].post.security).toEqual([]);
+    expect(spec.paths["/products/filter"].post.security).toBeUndefined();
   });
 
   it("documents complete catalog request bodies with examples", () => {

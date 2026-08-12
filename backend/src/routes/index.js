@@ -9,6 +9,7 @@ const attributeRoutes = require("../modules/attribute/attribute.routes");
 const categoryRoutes = require("../modules/category/category.routes");
 const brandRoutes = require("../modules/brand/brand.routes");
 const productRoutes = require("../modules/product/product.routes");
+const productPublicRoutes = require("../modules/product-public/product-public.routes");
 const variationRoutes = require("../modules/variation/variation.routes");
 const { sendResponse } = require("../shared/sendResponse");
 
@@ -28,6 +29,7 @@ const modules = [
   { path: "/attributes", router: attributeRoutes },
   { path: "/categories", router: categoryRoutes },
   { path: "/brands", router: brandRoutes },
+  { path: "/products", router: productPublicRoutes },
   { path: "/products", router: productRoutes },
   { path: "/variations", router: variationRoutes },
 ];

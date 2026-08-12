@@ -10,7 +10,8 @@ const Product = require("../src/modules/product/product.model");
 const Variant = require("../src/modules/product/variant.model");
 const productService = require("../src/modules/product/product.service");
 const variationService = require("../src/modules/variation/variation.service");
-const { API } = require("./helpers");
+const { API, createUserAndLogin } = require("./helpers");
+const { ROLES } = require("../src/shared/constants");
 
 const app = createApp();
 const actor = { id: 1000, role: "ROLE_ADMIN" };
@@ -47,9 +48,15 @@ async function catalogFixture() {
     },
   ]);
 
+  const parentCategory = await Category.create({
+    name: "Clothing",
+    slug: "clothing",
+    status: "ACTIVE",
+  });
   const category = await Category.create({
     name: "T-Shirts",
     slug: "t-shirts",
+    parentId: parentCategory._id,
     status: "ACTIVE",
     attributes: [
       brandAttribute._id,
@@ -59,7 +66,7 @@ async function catalogFixture() {
     ],
   });
   const brand = await Brand.create({ name: "Nike", slug: "nike", status: "ACTIVE" });
-  return { category, brand };
+  return { category, parentCategory, brand };
 }
 
 describe("catalog", () => {
@@ -68,7 +75,7 @@ describe("catalog", () => {
       name: "Sports T-Shirt",
       slug: "sports-t-shirt",
       description: "A production catalog fixture",
-      categoryId: new mongoose.Types.ObjectId().toString(),
+      categoryIds: [new mongoose.Types.ObjectId().toString()],
       sku: "SPORTS-TSHIRT",
       sellingPrice: 1299,
       thumbnail: { alt: "Sports T-Shirt", src: "https://cdn.example.com/shirt.webp" },
@@ -90,13 +97,13 @@ describe("catalog", () => {
   });
 
   it("generates variations and returns minimal product relationships", async () => {
-    const { category, brand } = await catalogFixture();
+    const { category, parentCategory, brand } = await catalogFixture();
     const product = await productService.create(
       {
         name: "Sports T-Shirt",
         slug: "sports-t-shirt",
         description: "A production catalog fixture",
-        categoryId: String(category._id),
+        categoryIds: [String(category._id)],
         brandId: String(brand._id),
         productType: "VARIABLE",
         status: "ACTIVE",
@@ -110,7 +117,8 @@ describe("catalog", () => {
 
     expect(product.id).toMatch(/^[a-f\d]{24}$/);
     expect(product).not.toHaveProperty("_id");
-    expect(product.categoryId).toMatchObject({ id: String(category._id), name: "T-Shirts", slug: "t-shirts" });
+    expect(product.categoryIds[0]).toMatchObject({ id: String(category._id), name: "T-Shirts", slug: "t-shirts" });
+    expect(product.categoryIds[0].path.map((item) => item.name)).toEqual(["Clothing", "T-Shirts"]);
     expect(product.brandId).toMatchObject({ id: String(brand._id), name: "Nike", slug: "nike" });
     expect(product.currency).toBe("BDT");
     expect(product.seo).toMatchObject({ title: "Sports T-Shirt", ogImage: "https://cdn.example.com/shirt.webp" });
@@ -141,13 +149,13 @@ describe("catalog", () => {
   });
 
   it("partially updates a variant and preserves omitted fields", async () => {
-    const { category, brand } = await catalogFixture();
+    const { category, parentCategory, brand } = await catalogFixture();
     const product = await productService.create(
       {
         name: "Sports T-Shirt",
         slug: "sports-t-shirt",
         description: "A production catalog fixture",
-        categoryId: String(category._id),
+        categoryIds: [String(category._id)],
         brandId: String(brand._id),
         productType: "VARIABLE",
         status: "ACTIVE",
@@ -183,13 +191,14 @@ describe("catalog", () => {
   });
 
   it("lists via POST with OR within filters and AND across filters", async () => {
-    const { category, brand } = await catalogFixture();
+    const moderator = await createUserAndLogin(app, { role: ROLES.MODERATOR });
+    const { category, parentCategory, brand } = await catalogFixture();
     await productService.create(
       {
         name: "Sports T-Shirt",
         slug: "sports-t-shirt",
         description: "Cotton shirt",
-        categoryId: String(category._id),
+        categoryIds: [String(category._id)],
         brandId: String(brand._id),
         productType: "VARIABLE",
         status: "ACTIVE",
@@ -202,8 +211,9 @@ describe("catalog", () => {
     );
     const response = await request(app)
       .post(`${API}/products/filter`)
+      .set("Authorization", moderator.authHeader)
       .send({
-        categoryId: String(category._id),
+        categoryId: String(parentCategory._id),
         filters: { brand: [String(brand._id)], color: ["black", "white"], size: ["m"] },
         sort: { field: "price", direction: "asc" },
         pagination: { page: 0, limit: 24 },
@@ -222,7 +232,7 @@ describe("catalog", () => {
         name: "Sports T-Shirt",
         slug: "sports-t-shirt",
         description: "Cotton shirt",
-        categoryId: String(category._id),
+        categoryIds: [String(category._id)],
         brandId: String(brand._id),
         productType: "VARIABLE",
         status: "ACTIVE",
@@ -254,9 +264,11 @@ describe("catalog", () => {
   });
 
   it("rejects hardcoded or unconfigured filter keys at the edge of the service", async () => {
+    const moderator = await createUserAndLogin(app, { role: ROLES.MODERATOR });
     const { category } = await catalogFixture();
     const response = await request(app)
       .post(`${API}/products/filter`)
+      .set("Authorization", moderator.authHeader)
       .send({ categoryId: String(category._id), filters: { made_up_filter: ["x"] } });
 
     expect(response.status).toBe(422);
@@ -267,7 +279,7 @@ describe("catalog", () => {
     const productIndexes = Product.schema.indexes().map(([keys]) => keys);
     const variantIndexes = Variant.schema.indexes().map(([keys]) => keys);
 
-    expect(productIndexes).toContainEqual({ categoryId: 1, brandId: 1, status: 1, createdAt: -1 });
+    expect(productIndexes).toContainEqual({ categoryIds: 1, brandId: 1, status: 1, createdAt: -1 });
     expect(productIndexes).toContainEqual({ "attributes.$**": 1 });
     expect(variantIndexes).toContainEqual({ "options.$**": 1 });
     expect(variantIndexes).toContainEqual({ productId: 1, sellingPrice: 1 });

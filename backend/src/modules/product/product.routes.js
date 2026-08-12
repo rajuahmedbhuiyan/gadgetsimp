@@ -11,11 +11,11 @@ const { ROLES } = require("../../shared/constants");
 
 const router = express.Router();
 
+router.use(authenticate, authorize(ROLES.MODERATOR));
 router.post("/filter", readLimiter, validate(schemas.listProducts), controller.list);
-router.post("/filter-options", readLimiter, validate(schemas.productFilters), controller.filters);
-router.post("/", writeLimiter, authenticate, authorize(ROLES.ADMIN), validate(schemas.createProduct), controller.create);
+router.post("/", writeLimiter, validate(schemas.createProduct), controller.create);
 router.get("/:id", readLimiter, validate(schemas.productById), controller.getById);
-router.put("/:id", writeLimiter, authenticate, authorize(ROLES.ADMIN), validate(schemas.updateProduct), controller.update);
-router.delete("/:id", writeLimiter, authenticate, authorize(ROLES.ADMIN), validate(schemas.productById), controller.remove);
+router.put("/:id", writeLimiter, validate(schemas.updateProduct), controller.update);
+router.delete("/:id", writeLimiter, validate(schemas.productById), controller.remove);
 
 module.exports = router;

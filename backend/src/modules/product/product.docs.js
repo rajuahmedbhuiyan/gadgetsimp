@@ -6,13 +6,20 @@
  *   schemas:
  *     ProductWrite:
  *       type: object
- *       required: [name, slug, description, categoryId, sellingPrice, thumbnail]
+ *       required: [name, slug, description, categoryIds, sellingPrice, thumbnail]
  *       properties:
  *         name: { type: string, example: Nike Sports T-Shirt }
  *         slug: { type: string, example: nike-sports-t-shirt }
  *         description: { type: string, example: Breathable performance t-shirt for everyday training. }
  *         shortDescription: { type: string, example: Lightweight performance t-shirt. }
- *         categoryId: { $ref: '#/components/schemas/CatalogId' }
+ *         categoryIds:
+ *           type: array
+ *           minItems: 1
+ *           maxItems: 20
+ *           uniqueItems: true
+ *           description: Direct category assignments. Send the most specific category; hierarchy is derived from parentId.
+ *           items: { $ref: '#/components/schemas/CatalogId' }
+ *           example: [66bca1f8d7432e0012345678]
  *         brandId: { $ref: '#/components/schemas/CatalogId' }
  *         sku: { type: string, example: NIKE-SPORTS }
  *         currency: { type: string, enum: [BDT], default: BDT, example: BDT }
@@ -110,7 +117,7 @@
  *             slug: nike-sports-t-shirt
  *             description: Breathable performance t-shirt for everyday training.
  *             shortDescription: Lightweight performance t-shirt.
- *             categoryId: 66bca1f8d7432e0012345678
+ *             categoryIds: [66bca1f8d7432e0012345678]
  *             brandId: 66bca1f8d7432e0012345679
  *             productType: VARIABLE
  *             sku: NIKE-SPORTS
@@ -168,8 +175,7 @@
  * /products/filter:
  *   post:
  *     tags: [Products]
- *     summary: Filter public products
- *     security: []
+ *     summary: Filter products for staff
  *     requestBody:
  *       required: true
  *       content:
@@ -182,10 +188,10 @@
  *             sort: { field: price, direction: asc }
  *             pagination: { page: 0, limit: 24 }
  *     responses:
- *       200: { description: Paginated products with minimal categoryId and brandId objects. }
+ *       200: { description: Paginated products with minimal categoryIds and brandId objects. }
  * /products/filter-options:
  *   post:
- *     tags: [Products]
+ *     tags: [Products Public]
  *     summary: Get product filter options and counts
  *     security: []
  *     requestBody:
@@ -200,7 +206,6 @@
  *   get:
  *     tags: [Products]
  *     summary: Get a product with minimal relationships and variations
- *     security: []
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
  *     responses:
@@ -220,7 +225,7 @@
  *             slug: nike-sports-t-shirt
  *             description: Updated breathable performance t-shirt for everyday training.
  *             shortDescription: Lightweight performance t-shirt.
- *             categoryId: 66bca1f8d7432e0012345678
+ *             categoryIds: [66bca1f8d7432e0012345678]
  *             brandId: 66bca1f8d7432e0012345679
  *             sku: NIKE-SPORTS
  *             currency: BDT

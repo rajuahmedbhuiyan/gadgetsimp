@@ -15,7 +15,7 @@ async function update(req, res) {
 }
 
 async function getById(req, res) {
-  const product = await service.getById(req.validated.params.id);
+  const product = await service.getById(req.validated.params.id, { publicOnly: false });
   return sendResponse(res, { message: "Product retrieved", data: { product } });
 }
 
@@ -28,17 +28,9 @@ async function list(req, res) {
   });
 }
 
-async function filters(req, res) {
-  const availableFilters = await service.filters(req.validated.body);
-  return sendResponse(res, {
-    message: "Product filters retrieved",
-    data: { filters: availableFilters },
-  });
-}
-
 async function remove(req, res) {
   const deleted = await service.remove(req.validated.params.id, actor(req));
   return sendResponse(res, { message: "Product archived", data: { deleted } });
 }
 
-module.exports = { create, update, getById, list, filters, remove };
+module.exports = { create, update, getById, list, remove };

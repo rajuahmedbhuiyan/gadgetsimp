@@ -48,7 +48,8 @@ const shape = {
   slug,
   description: z.string().trim().min(1).max(100_000),
   shortDescription: z.string().trim().max(600).optional(),
-  categoryId: objectId,
+  categoryIds: z.array(objectId).min(1).max(20)
+    .refine((ids) => new Set(ids).size === ids.length, { message: "Category ids must be unique" }),
   brandId: objectId.optional(),
   sku: z.string().trim().min(1).max(120).optional(),
   status: z.enum(PRODUCT_STATUS_VALUES).optional(),

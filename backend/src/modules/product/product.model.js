@@ -32,7 +32,11 @@ const productSchema = new mongoose.Schema(
     },
     description: { type: String, required: true, trim: true, maxlength: 100_000 },
     shortDescription: { type: String, trim: true, maxlength: 600 },
-    categoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true },
+    categoryIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
+      required: true,
+      validate: { validator: (ids) => ids.length > 0, message: "At least one category is required" },
+    },
     brandId: { type: mongoose.Schema.Types.ObjectId, ref: "Brand" },
     productType: { type: String, enum: PRODUCT_TYPE_VALUES, default: PRODUCT_TYPE.VARIABLE },
     sku: { type: String, unique: true, sparse: true, uppercase: true, trim: true, maxlength: 120 },
@@ -63,8 +67,8 @@ const productSchema = new mongoose.Schema(
   catalogSchemaOptions
 );
 
-productSchema.index({ categoryId: 1, status: 1, visibility: 1, publishedAt: -1, createdAt: -1 });
-productSchema.index({ categoryId: 1, brandId: 1, status: 1, createdAt: -1 });
+productSchema.index({ categoryIds: 1, status: 1, visibility: 1, publishedAt: -1, createdAt: -1 });
+productSchema.index({ categoryIds: 1, brandId: 1, status: 1, createdAt: -1 });
 productSchema.index({ status: 1, featured: 1, createdAt: -1 });
 productSchema.index({ sellingPrice: 1, status: 1 });
 productSchema.index({ "attributes.$**": 1 });

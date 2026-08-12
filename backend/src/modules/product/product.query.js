@@ -6,14 +6,14 @@ const Variant = require("./variant.model");
 const { ATTRIBUTE_SOURCE, PRODUCT_STATUS, PRODUCT_VISIBILITY } = require("../../shared/constants");
 const { mapCatalogRecord } = require("../../shared/catalogSchemas");
 
-function publicMatch({ categoryId, search }) {
+function publicMatch({ categoryIds, search }) {
   const match = {
     status: { $in: [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK] },
     visibility: PRODUCT_VISIBILITY.PUBLIC,
     deletedAt: null,
     publishedAt: { $ne: null, $lte: new Date() },
   };
-  if (categoryId) match.categoryId = new mongoose.Types.ObjectId(categoryId);
+  if (categoryIds?.length) match.categoryIds = { $in: categoryIds.map((id) => new mongoose.Types.ObjectId(id)) };
   if (search) match.$text = { $search: search };
   return match;
 }
@@ -100,9 +100,9 @@ function sortStage(sort, hasSearch) {
   return { createdAt: direction, _id: 1 };
 }
 
-async function listCatalog({ categoryId, search, filters, sort, pagination }) {
+async function listCatalog({ categoryIds, search, filters, sort, pagination }) {
   const { page, limit } = pagination;
-  const pipeline = [{ $match: publicMatch({ categoryId, search }) }];
+  const pipeline = [{ $match: publicMatch({ categoryIds, search }) }];
   if (search) pipeline.push({ $addFields: { _searchScore: { $meta: "textScore" } } });
   pipeline.push(...applyFilters(filters));
   pipeline.push(matchingVariantsLookup([], "_priceStats", { groupByPrice: true }));
@@ -118,7 +118,7 @@ async function listCatalog({ categoryId, search, filters, sort, pagination }) {
       items: [
         { $skip: page * limit },
         { $limit: limit },
-        { $lookup: { from: "categories", localField: "categoryId", foreignField: "_id", as: "_category" } },
+        { $lookup: { from: "categories", localField: "categoryIds", foreignField: "_id", as: "_categories" } },
         { $lookup: { from: "brands", localField: "brandId", foreignField: "_id", as: "_brand" } },
         {
           $project: {
@@ -126,9 +126,10 @@ async function listCatalog({ categoryId, search, filters, sort, pagination }) {
             name: 1,
             slug: 1,
             shortDescription: 1,
-            categoryId: {
-              $let: {
-                vars: { category: { $arrayElemAt: ["$_category", 0] } },
+            categoryIds: {
+              $map: {
+                input: "$_categories",
+                as: "category",
                 in: { id: "$$category._id", name: "$$category.name", slug: "$$category.slug" },
               },
             },
@@ -167,7 +168,7 @@ async function listCatalog({ categoryId, search, filters, sort, pagination }) {
   return {
     items: (result?.items ?? []).map((record) => {
       const item = mapCatalogRecord(record);
-      if (item.categoryId?.id) item.categoryId.id = String(item.categoryId.id);
+      item.categoryIds = (item.categoryIds ?? []).map((category) => ({ ...category, id: String(category.id) }));
       if (item.brandId?.id) item.brandId.id = String(item.brandId.id);
       return item;
     }),
@@ -229,13 +230,13 @@ function facetPipeline(attribute, allFilters) {
   return stages;
 }
 
-async function catalogFacets({ categoryId, search, filters, attributes }) {
+async function catalogFacets({ categoryIds, search, filters, attributes }) {
   if (attributes.length === 0) return {};
   const facets = Object.fromEntries(
     attributes.map((attribute) => [attribute.key, facetPipeline(attribute, filters)])
   );
   const [result] = await Product.aggregate([
-    { $match: publicMatch({ categoryId, search }) },
+    { $match: publicMatch({ categoryIds, search }) },
     { $facet: facets },
   ]).allowDiskUse(true);
   return result ?? {};

@@ -23,15 +23,17 @@ function sessionOption(session) {
   return session ? { session } : {};
 }
 
-async function categoryContext(categoryId) {
-  const category = await Category.findOne({ _id: categoryId, deletedAt: null }).lean();
-  if (!category) {
-    throw ApiError.unprocessable("Category does not exist", { code: "PRODUCT_CATEGORY_INVALID" });
+async function categoryContext(categoryIds) {
+  const uniqueIds = [...new Set(categoryIds.map(String))];
+  const categories = await Category.find({ _id: { $in: uniqueIds }, deletedAt: null }).lean();
+  if (categories.length !== uniqueIds.length) {
+    throw ApiError.unprocessable("One or more categories do not exist", { code: "PRODUCT_CATEGORY_INVALID" });
   }
 
-  const attributes = await Attribute.find({ _id: { $in: category.attributes }, deletedAt: null }).lean();
+  const configuredAttributeIds = [...new Set(categories.flatMap((category) => category.attributes ?? []).map(String))];
+  const attributes = await Attribute.find({ _id: { $in: configuredAttributeIds }, deletedAt: null }).lean();
   const byId = new Map(attributes.map((attribute) => [String(attribute._id), attribute]));
-  const configured = category.attributes
+  const configured = configuredAttributeIds
     .map((attributeId, index) => ({
       ...byId.get(String(attributeId)),
       categoryConfiguration: {
@@ -43,7 +45,7 @@ async function categoryContext(categoryId) {
     }))
     .filter((attribute) => attribute.key);
 
-  return { category, attributes: configured, byKey: new Map(configured.map((item) => [item.key, item])) };
+  return { categories, attributes: configured, byKey: new Map(configured.map((item) => [item.key, item])) };
 }
 
 async function validateBrand(brandId) {
@@ -194,16 +196,30 @@ function withSeoDefaults(product) {
 }
 
 async function presentProduct(product, variations) {
-  const [category, brand] = await Promise.all([
-    Category.findOne({ _id: product.categoryId, deletedAt: null }).select({ name: 1, slug: 1 }).lean(),
+  const [allCategories, brand] = await Promise.all([
+    Category.find({ deletedAt: null }).select({ name: 1, slug: 1, parentId: 1 }).lean(),
     product.brandId
       ? Brand.findOne({ _id: product.brandId, deletedAt: null }).select({ name: 1, slug: 1, logo: 1 }).lean()
       : null,
   ]);
+  const categoriesById = new Map(allCategories.map((category) => [String(category._id), category]));
+  const categorySummary = (category) => ({ id: String(category._id), name: category.name, slug: category.slug });
+  const categoryPath = (category) => {
+    const path = [];
+    const seen = new Set();
+    let current = category;
+    while (current && !seen.has(String(current._id))) {
+      seen.add(String(current._id));
+      path.unshift(categorySummary(current));
+      current = current.parentId ? categoriesById.get(String(current.parentId)) : null;
+    }
+    return path;
+  };
   const result = mapCatalogRecord(product);
-  result.categoryId = category
-    ? { id: String(category._id), name: category.name, slug: category.slug }
-    : null;
+  result.categoryIds = (product.categoryIds ?? [])
+    .map((id) => categoriesById.get(String(id)))
+    .filter(Boolean)
+    .map((category) => ({ ...categorySummary(category), path: categoryPath(category) }));
   result.brandId = brand
     ? { id: String(brand._id), name: brand.name, slug: brand.slug, logo: brand.logo }
     : null;
@@ -212,7 +228,7 @@ async function presentProduct(product, variations) {
 }
 
 async function create(input, actor) {
-  const context = await categoryContext(input.categoryId);
+  const context = await categoryContext(input.categoryIds);
   await validateBrand(input.brandId);
   validateProductAttributes(context, input.attributes, input);
   const productType = validateProductType(input);
@@ -266,8 +282,8 @@ async function update(id, input, actor) {
   const current = await Product.findOne({ _id: id, deletedAt: null });
   if (!current) throw ApiError.notFound("Product not found");
 
-  const categoryId = input.categoryId ?? current.categoryId;
-  const context = await categoryContext(categoryId);
+  const categoryIds = input.categoryIds ?? current.categoryIds;
+  const context = await categoryContext(categoryIds);
   const attributes = input.attributes ?? Object.fromEntries(current.attributes ?? []);
   const entityValues = { brandId: input.brandId ?? current.brandId };
   await validateBrand(entityValues.brandId);
@@ -323,9 +339,27 @@ async function remove(id, actor) {
   return { id: String(removed._id) };
 }
 
-async function filterMetadata(categoryId) {
+async function categoryScope(categoryId) {
   if (!categoryId) return [];
-  const context = await categoryContext(categoryId);
+  const categories = await Category.find({ deletedAt: null }).select({ _id: 1, parentId: 1 }).lean();
+  const children = new Map();
+  for (const category of categories) {
+    const key = category.parentId == null ? null : String(category.parentId);
+    children.set(key, [...(children.get(key) ?? []), String(category._id)]);
+  }
+  const scope = [];
+  const queue = [String(categoryId)];
+  while (queue.length) {
+    const id = queue.shift();
+    scope.push(id);
+    queue.push(...(children.get(id) ?? []));
+  }
+  return scope;
+}
+
+async function filterMetadata(categoryIds) {
+  if (categoryIds.length === 0) return [];
+  const context = await categoryContext(categoryIds);
   return context.attributes
     .filter(
       (attribute) =>
@@ -378,9 +412,10 @@ function normalizeFilters(requested, metadata) {
 }
 
 async function list(params) {
-  const metadata = await filterMetadata(params.categoryId);
+  const categoryIds = await categoryScope(params.categoryId);
+  const metadata = await filterMetadata(categoryIds);
   const normalized = normalizeFilters(params.filters, metadata);
-  return query.listCatalog({ ...params, filters: normalized });
+  return query.listCatalog({ ...params, categoryIds, filters: normalized });
 }
 
 function fallbackLabel(value) {
@@ -403,10 +438,11 @@ async function filters(params) {
       code: "CATEGORY_REQUIRED",
     });
   }
-  const metadata = await filterMetadata(params.categoryId);
+  const categoryIds = await categoryScope(params.categoryId);
+  const metadata = await filterMetadata(categoryIds);
   const normalized = normalizeFilters(params.filters, metadata);
   const facetResult = await query.catalogFacets({
-    categoryId: params.categoryId,
+    categoryIds,
     search: params.search,
     filters: normalized,
     attributes: metadata,
