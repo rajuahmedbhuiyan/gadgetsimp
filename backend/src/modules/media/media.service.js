@@ -155,7 +155,8 @@ async function list(params, { scopeToUploader } = {}) {
   if (scopeToUploader != null) filter.uploadedBy = scopeToUploader;
 
   const sort = { [params.sortBy]: params.sortOrder === "asc" ? 1 : -1 };
-  const skip = (params.page - 1) * params.limit;
+  // Zero-based pages, so no off-by-one correction is needed here.
+  const skip = params.page * params.limit;
 
   const [items, total] = await Promise.all([
     Media.find(filter).sort(sort).skip(skip).limit(params.limit).lean(),

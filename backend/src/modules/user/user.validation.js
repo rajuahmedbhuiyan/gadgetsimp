@@ -73,7 +73,8 @@ const updateProfile = {
 const filterUsers = {
   body: z
     .object({
-      page: z.coerce.number().int().min(1).default(PAGINATION.DEFAULT_PAGE),
+      // Zero-based: the first page is 0.
+      page: z.coerce.number().int().min(0).default(PAGINATION.DEFAULT_PAGE),
       limit: z.coerce
         .number()
         .int()

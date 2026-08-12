@@ -58,7 +58,10 @@
  *     PaginationMeta:
  *       type: object
  *       properties:
- *         page: { type: integer, example: 1 }
+ *         page:
+ *           type: integer
+ *           description: Zero-based. The last page is `totalPages - 1`.
+ *           example: 0
  *         limit: { type: integer, example: 20 }
  *         total: { type: integer, example: 137 }
  *         totalPages: { type: integer, example: 7 }
@@ -166,8 +169,8 @@
  *     PageParam:
  *       in: query
  *       name: page
- *       schema: { type: integer, minimum: 1, default: 1 }
- *       description: 1-based page number.
+ *       schema: { type: integer, minimum: 0, default: 0 }
+ *       description: Zero-based page number - the first page is 0.
  *     LimitParam:
  *       in: query
  *       name: limit

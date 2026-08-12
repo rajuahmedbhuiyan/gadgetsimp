@@ -22,6 +22,9 @@ function sendResponse(res, { statusCode = 200, message = "Success", data = null,
 
 /**
  * Builds the `meta` block for a paginated list.
+ *
+ * `page` is zero-based, so the last page is `totalPages - 1` and the boundary
+ * checks below read off that rather than off `totalPages` itself.
  */
 function paginationMeta({ page, limit, total }) {
   const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
@@ -31,8 +34,10 @@ function paginationMeta({ page, limit, total }) {
     limit,
     total,
     totalPages,
-    hasNextPage: page < totalPages,
-    hasPrevPage: page > 1,
+    // `page + 1 < totalPages`, not `page < totalPages`: on the final page
+    // those differ, and the second would promise a page that is not there.
+    hasNextPage: page + 1 < totalPages,
+    hasPrevPage: page > 0,
   };
 }
 

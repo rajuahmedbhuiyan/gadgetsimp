@@ -304,7 +304,11 @@
  *       type: object
  *       description: Shared filter body for the media listing endpoints.
  *       properties:
- *         page: { type: integer, minimum: 1, default: 1 }
+ *         page:
+ *           type: integer
+ *           minimum: 0
+ *           default: 0
+ *           description: Zero-based - the first page is 0.
  *         limit: { type: integer, minimum: 1, maximum: 100, default: 20 }
  *         search:
  *           type: string

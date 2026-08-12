@@ -195,12 +195,12 @@ describe("POST /users - pagination and sorting", () => {
     await seedUsers();
   });
 
-  it("paginates with metadata", async () => {
-    const response = await filter({ limit: 2, page: 1, includeDeleted: true }, authHeader);
+  it("paginates with metadata, first page is 0", async () => {
+    const response = await filter({ limit: 2, page: 0, includeDeleted: true }, authHeader);
 
     expect(response.body.data.users).toHaveLength(2);
     expect(response.body.meta).toMatchObject({
-      page: 1,
+      page: 0,
       limit: 2,
       total: 5, // 4 seeded + the owner running the query
       totalPages: 3,
@@ -209,9 +209,28 @@ describe("POST /users - pagination and sorting", () => {
     });
   });
 
+  it("defaults to page 0 when none is given", async () => {
+    const response = await filter({ limit: 2, includeDeleted: true }, authHeader);
+
+    expect(response.body.meta.page).toBe(0);
+    expect(response.body.meta.hasPrevPage).toBe(false);
+  });
+
+  it("reports no next page on the last one", async () => {
+    // 5 rows at 2 per page -> pages 0, 1, 2. Page 2 is the last.
+    const last = await filter({ limit: 2, page: 2, includeDeleted: true }, authHeader);
+
+    expect(last.body.data.users).toHaveLength(1);
+    expect(last.body.meta).toMatchObject({ hasNextPage: false, hasPrevPage: true });
+  });
+
+  it("rejects a negative page", async () => {
+    expect((await filter({ page: -1 }, authHeader)).status).toBe(422);
+  });
+
   it("returns the next page", async () => {
-    const first = await filter({ limit: 2, page: 1, includeDeleted: true }, authHeader);
-    const second = await filter({ limit: 2, page: 2, includeDeleted: true }, authHeader);
+    const first = await filter({ limit: 2, page: 0, includeDeleted: true }, authHeader);
+    const second = await filter({ limit: 2, page: 1, includeDeleted: true }, authHeader);
 
     const firstIds = first.body.data.users.map((u) => u.id);
     const secondIds = second.body.data.users.map((u) => u.id);

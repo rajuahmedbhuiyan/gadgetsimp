@@ -54,8 +54,16 @@ function assignableRoles(actorRole) {
   return ROLE_VALUES.filter((role) => roleRank(role) < roleRank(actorRole));
 }
 
+/**
+ * Pages are **zero-based**: the first page is `page: 0`.
+ *
+ * That matches what table components on the frontend expect (MUI DataGrid,
+ * TanStack Table) and keeps the skip arithmetic honest - `skip = page * limit`
+ * rather than an off-by-one waiting to happen.
+ */
 const PAGINATION = Object.freeze({
-  DEFAULT_PAGE: 1,
+  FIRST_PAGE: 0,
+  DEFAULT_PAGE: 0,
   DEFAULT_LIMIT: 20,
   MAX_LIMIT: 100,
 });

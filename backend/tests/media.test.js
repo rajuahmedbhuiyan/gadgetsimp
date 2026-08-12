@@ -338,11 +338,12 @@ describe("POST /media/my", () => {
     const response = await request(app)
       .post(`${API}/media/my`)
       .set("Authorization", mine.authHeader)
-      .send({ limit: 2, page: 2 });
+      .send({ limit: 2, page: 1 });
 
+    // Zero-based: page 1 is the second page.
     expect(response.body.data.media).toHaveLength(2);
     expect(response.body.meta).toMatchObject({
-      page: 2,
+      page: 1,
       limit: 2,
       total: 5,
       totalPages: 3,

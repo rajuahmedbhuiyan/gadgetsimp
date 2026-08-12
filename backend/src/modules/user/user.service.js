@@ -142,7 +142,8 @@ async function filterUsers(params) {
   }
 
   const sort = { [params.sortBy]: params.sortOrder === "asc" ? 1 : -1 };
-  const skip = (params.page - 1) * params.limit;
+  // Zero-based pages, so no off-by-one correction is needed here.
+  const skip = params.page * params.limit;
 
   // Page and count in parallel - the count is needed for pagination metadata
   // and neither depends on the other.

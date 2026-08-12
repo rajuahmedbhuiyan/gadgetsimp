@@ -32,7 +32,7 @@ ids from 1000):
 | `customer@gadgetsimp.dev` | `Customer1234` | `ROLE_CUSTOMER` |
 
 ```bash
-npm test              # 280 tests, in-memory MongoDB, no external services
+npm test              # 283 tests, in-memory MongoDB, no external services
 npm run docs:export   # write openapi.json for client generation / CI diffing
 ```
 
@@ -79,6 +79,11 @@ Rate limiting comes before validation and auth deliberately: a flood should be
 rejected before it costs a schema parse or a bcrypt comparison.
 
 ### Decisions worth knowing
+
+**Pages are zero-based.** The first page is `page: 0`, so `skip = page * limit`
+with no off-by-one correction, and it matches what table components on the
+frontend expect. `hasNextPage` is `page + 1 < totalPages` — on the last page
+those differ, and the naive check would promise a page that isn't there.
 
 **One response envelope.** Success and failure share a shape, so the frontend
 writes one parser rather than one per endpoint. Errors carry a stable `code` —
