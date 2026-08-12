@@ -111,7 +111,7 @@ async function withTransaction(work) {
   } catch (error) {
     const unsupported =
       error?.code === 20 ||
-      /Transaction numbers are only allowed|replica set|Sessions are not supported/i.test(
+      /Transaction numbers are only allowed|replica set|Sessions are not supported|does not support retryable writes/i.test(
         error?.message ?? ""
       );
 

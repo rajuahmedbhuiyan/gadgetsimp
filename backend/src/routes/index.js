@@ -5,6 +5,11 @@ const mongoose = require("mongoose");
 const authRoutes = require("../modules/auth/auth.routes");
 const userRoutes = require("../modules/user/user.routes");
 const mediaRoutes = require("../modules/media/media.routes");
+const attributeRoutes = require("../modules/attribute/attribute.routes");
+const categoryRoutes = require("../modules/category/category.routes");
+const brandRoutes = require("../modules/brand/brand.routes");
+const productRoutes = require("../modules/product/product.routes");
+const variationRoutes = require("../modules/variation/variation.routes");
 const { sendResponse } = require("../shared/sendResponse");
 
 const router = express.Router();
@@ -20,6 +25,11 @@ const modules = [
   { path: "/auth", router: authRoutes },
   { path: "/users", router: userRoutes },
   { path: "/media", router: mediaRoutes },
+  { path: "/attributes", router: attributeRoutes },
+  { path: "/categories", router: categoryRoutes },
+  { path: "/brands", router: brandRoutes },
+  { path: "/products", router: productRoutes },
+  { path: "/variations", router: variationRoutes },
 ];
 
 /**

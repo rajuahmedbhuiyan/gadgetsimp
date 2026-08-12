@@ -33,6 +33,22 @@ describe("OpenAPI spec", () => {
         "/media/my",
         "/media/filter",
         "/media/{id}",
+        "/products",
+        "/products/filter",
+        "/products/filter-options",
+        "/products/{id}",
+        "/variations/generate",
+        "/variations/filter",
+        "/variations/{id}",
+        "/categories",
+        "/categories/filter",
+        "/categories/filter-groupped",
+        "/categories/sort",
+        "/categories/{id}/configuration",
+        "/brands",
+        "/brands/filter",
+        "/attributes",
+        "/attributes/filter",
       ])
     );
   });
@@ -73,6 +89,48 @@ describe("OpenAPI spec", () => {
     expect(spec.paths["/auth/verify-email"].post.security).toEqual([]);
     expect(spec.paths["/auth/resend-verification"].post.security).toEqual([]);
     expect(spec.paths["/auth/social-login"].post.security).toEqual([]);
+    expect(spec.paths["/products/filter"].post.security).toEqual([]);
+    expect(spec.paths["/products/filter-options"].post.security).toEqual([]);
+  });
+
+  it("documents complete catalog request bodies with examples", () => {
+    for (const [path, method] of [
+      ["/products", "post"],
+      ["/products/filter", "post"],
+      ["/products/filter-options", "post"],
+      ["/products/{id}", "put"],
+      ["/variations/generate", "post"],
+      ["/variations/filter", "post"],
+      ["/variations/{id}", "patch"],
+      ["/categories", "post"],
+      ["/categories/filter", "post"],
+      ["/categories/filter-groupped", "post"],
+      ["/categories/sort", "put"],
+      ["/categories/{id}", "put"],
+      ["/brands", "post"],
+      ["/brands/filter", "post"],
+      ["/brands/{id}", "put"],
+      ["/attributes", "post"],
+      ["/attributes/filter", "post"],
+      ["/attributes/{id}", "put"],
+    ]) {
+      const media = spec.paths[path][method].requestBody?.content?.["application/json"];
+      expect({ path, method, hasSchema: Boolean(media?.schema), hasExample: Boolean(media?.example) }).toEqual({
+        path,
+        method,
+        hasSchema: true,
+        hasExample: true,
+      });
+    }
+  });
+
+  it("uses direct catalog resource paths and PUT updates", () => {
+    expect(spec.paths["/products/create"]).toBeUndefined();
+    expect(spec.paths["/categories/create"]).toBeUndefined();
+    expect(spec.paths["/brands/create"]).toBeUndefined();
+    expect(spec.paths["/attributes/create"]).toBeUndefined();
+    expect(spec.paths["/products/{id}"].patch).toBeUndefined();
+    expect(spec.paths["/products/{id}"].put).toBeDefined();
   });
 
   it("documents both social providers on the one endpoint", () => {

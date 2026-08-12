@@ -162,6 +162,71 @@ const MEDIA_TYPE = Object.freeze({
 
 const MEDIA_TYPE_VALUES = Object.freeze(Object.values(MEDIA_TYPE));
 
+/* ------------------------------- Catalog -------------------------------- */
+
+const CATALOG_STATUS = Object.freeze({
+  DRAFT: "DRAFT",
+  ACTIVE: "ACTIVE",
+  INACTIVE: "INACTIVE",
+  ARCHIVED: "ARCHIVED",
+});
+
+const CATALOG_STATUS_VALUES = Object.freeze(Object.values(CATALOG_STATUS));
+
+const VISIBILITY = Object.freeze({
+  PUBLIC: "PUBLIC",
+  PRIVATE: "PRIVATE",
+  HIDDEN: "HIDDEN",
+});
+
+const VISIBILITY_VALUES = Object.freeze(Object.values(VISIBILITY));
+
+const PRODUCT_STATUS = Object.freeze({
+  DRAFT: "DRAFT",
+  ACTIVE: "ACTIVE",
+  OUT_OF_STOCK: "OUT_OF_STOCK",
+});
+const PRODUCT_STATUS_VALUES = Object.freeze(Object.values(PRODUCT_STATUS));
+
+const PRODUCT_VISIBILITY = Object.freeze({ PUBLIC: "PUBLIC", HIDDEN: "HIDDEN" });
+const PRODUCT_VISIBILITY_VALUES = Object.freeze(Object.values(PRODUCT_VISIBILITY));
+
+// These values intentionally match the public contract in the catalog spec.
+const ATTRIBUTE_SOURCE = Object.freeze({
+  PRODUCT: "product",
+  VARIANT: "variant",
+  ENTITY: "entity",
+});
+
+const ATTRIBUTE_SOURCE_VALUES = Object.freeze(Object.values(ATTRIBUTE_SOURCE));
+
+const ATTRIBUTE_TYPE = Object.freeze({
+  CHECKBOX: "checkbox",
+  RADIO: "radio",
+  SELECT: "select",
+  COLOR: "color",
+  RANGE: "range",
+});
+
+const ATTRIBUTE_TYPE_VALUES = Object.freeze(Object.values(ATTRIBUTE_TYPE));
+
+const PRODUCT_TYPE = Object.freeze({
+  SIMPLE: "SIMPLE",
+  VARIABLE: "VARIABLE",
+});
+
+const PRODUCT_TYPE_VALUES = Object.freeze(Object.values(PRODUCT_TYPE));
+
+const STOCK_STATUS = Object.freeze({
+  IN_STOCK: "IN_STOCK",
+  OUT_OF_STOCK: "OUT_OF_STOCK",
+  BACKORDER: "BACKORDER",
+});
+
+const STOCK_STATUS_VALUES = Object.freeze(Object.values(STOCK_STATUS));
+
+const CURRENCY_VALUES = Object.freeze(["BDT", "USD", "EUR", "GBP"]);
+
 const REFRESH_COOKIE_NAME = "gs_refresh_token";
 
 /**
@@ -201,6 +266,23 @@ module.exports = {
   MEDIA,
   MEDIA_TYPE,
   MEDIA_TYPE_VALUES,
+  CATALOG_STATUS,
+  CATALOG_STATUS_VALUES,
+  VISIBILITY,
+  VISIBILITY_VALUES,
+  PRODUCT_STATUS,
+  PRODUCT_STATUS_VALUES,
+  PRODUCT_VISIBILITY,
+  PRODUCT_VISIBILITY_VALUES,
+  ATTRIBUTE_SOURCE,
+  ATTRIBUTE_SOURCE_VALUES,
+  ATTRIBUTE_TYPE,
+  ATTRIBUTE_TYPE_VALUES,
+  PRODUCT_TYPE,
+  PRODUCT_TYPE_VALUES,
+  STOCK_STATUS,
+  STOCK_STATUS_VALUES,
+  CURRENCY_VALUES,
   REFRESH_COOKIE_NAME,
   EMAIL_VERIFICATION_TTL_MINUTES,
   PASSWORD_RESET_TTL_MINUTES,

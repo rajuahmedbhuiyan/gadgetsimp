@@ -1,6 +1,7 @@
 "use strict";
 
 const { z } = require("zod");
+const { PAGINATION } = require("./constants");
 
 /**
  * Zod fragments reused across modules.
@@ -24,4 +25,24 @@ const integerId = z.coerce
 
 const integerIdParam = z.object({ id: integerId }).strict();
 
-module.exports = { integerId, integerIdParam };
+const objectId = z
+  .string()
+  .trim()
+  .regex(/^[a-f\d]{24}$/i, "Must be a valid identifier");
+
+const objectIdParam = z.object({ id: objectId }).strict();
+
+const pagination = z
+  .object({
+    page: z.coerce.number().int().min(0).default(PAGINATION.DEFAULT_PAGE),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(PAGINATION.MAX_LIMIT)
+      .default(PAGINATION.DEFAULT_LIMIT),
+  })
+  .strict()
+  .default({});
+
+module.exports = { integerId, integerIdParam, objectId, objectIdParam, pagination };

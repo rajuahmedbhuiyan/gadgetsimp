@@ -3,8 +3,8 @@
 Express 5 + MongoDB backend for the GadgetSimp storefront. Modular monolith,
 tiered rate limiting, OpenAPI docs generated from the code.
 
-**Implemented:** auth, users, media.
-**Not yet built:** catalog (categories, products), cart, orders, reviews —
+**Implemented:** auth, users, media, catalog (attributes, categories, brands, products, variants, filtering/facets).
+**Not yet built:** cart, orders, reviews —
 each drops in as one folder under `src/modules/` plus one line in
 `src/routes/index.js`.
 
@@ -116,6 +116,30 @@ and is skipped entirely when `bufferCommands` is off, which silently leaves a
 database with nothing but `_id_` — no unique email constraint, no text search.
 `ensureIndexes()` runs after models register and before the socket opens;
 `tests/indexes.test.js` asserts the real index set.
+
+## Catalog
+
+The catalog follows the same vertical-module flow as the rest of the API. The
+Attribute Library owns reusable metadata; categories select those attributes
+and decide which are filterable or eligible to generate variants. Brands are
+global entities. Products store product-level attributes, while purchasable
+SKUs live in the separate `variants` collection.
+
+Complex reads use request bodies and remain public:
+
+```text
+POST /products/filter          search, filters, sorting, zero-based pagination
+POST /products/filter-options  category-driven options and database facet counts
+POST /categories/filter        public category discovery
+POST /brands/filter            public brand discovery
+```
+
+Filter fields are resolved from Attribute metadata rather than hardcoded
+names. Values inside one filter use OR semantics; different filters are ANDed.
+MongoDB aggregation performs filtering and counts without loading the catalog
+into application memory. Product creation generates the Cartesian product of
+selected variant options and writes the product and SKUs in a transaction on
+replica-set/Atlas deployments.
 
 **The seed refuses non-local databases.** It deletes before it writes, and
 `NODE_ENV=development` pointed at a shared Atlas cluster looks perfectly safe

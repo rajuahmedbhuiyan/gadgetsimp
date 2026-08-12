@@ -37,7 +37,15 @@ describe("database indexes", () => {
   });
 
   it("builds more than the default _id index on every collection", async () => {
-    for (const modelName of ["User", "PendingRegistration"]) {
+    for (const modelName of [
+      "User",
+      "PendingRegistration",
+      "Attribute",
+      "Category",
+      "Brand",
+      "Product",
+      "Variant",
+    ]) {
       const names = await indexNames(modelName);
       expect(names.length).toBeGreaterThan(1);
     }
@@ -48,6 +56,25 @@ describe("database indexes", () => {
 
     expect(index).toBeDefined();
     expect(index.unique).toBe(true);
+  });
+
+  it("enforces catalog slug, attribute key and SKU uniqueness", async () => {
+    for (const [modelName, key] of [
+      ["Attribute", { key: 1 }],
+      ["Category", { slug: 1 }],
+      ["Brand", { slug: 1 }],
+      ["Product", { slug: 1 }],
+      ["Variant", { sku: 1 }],
+    ]) {
+      const index = await indexByKey(modelName, key);
+      expect(index).toBeDefined();
+      expect(index.unique).toBe(true);
+    }
+  });
+
+  it("builds dynamic catalog attribute and option indexes", async () => {
+    expect(await indexByKey("Product", { "attributes.$**": 1 })).toBeDefined();
+    expect(await indexByKey("Variant", { "options.$**": 1 })).toBeDefined();
   });
 
 

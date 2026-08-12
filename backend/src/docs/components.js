@@ -16,6 +16,62 @@
  * @openapi
  * components:
  *   schemas:
+ *     CatalogId:
+ *       type: string
+ *       pattern: '^[0-9a-fA-F]{24}$'
+ *       example: 66bca1f8d7432e0012345678
+ *
+ *     ProductImage:
+ *       type: object
+ *       required: [alt, src]
+ *       properties:
+ *         alt: { type: string, example: Black Nike sports t-shirt }
+ *         src: { type: string, example: https://cdn.example.com/products/nike-shirt.webp }
+ *         id:
+ *           type: integer
+ *           minimum: 1
+ *           description: Optional media id; omitted when no media record is linked.
+ *           example: 1042
+ *
+ *     Stock:
+ *       type: object
+ *       properties:
+ *         quantity: { type: integer, minimum: 0, example: 20 }
+ *         trackInventory: { type: boolean, example: true }
+ *         allowBackorder: { type: boolean, example: false }
+ *         lowStockThreshold: { type: integer, minimum: 0, example: 5 }
+ *         status: { type: string, enum: [IN_STOCK, OUT_OF_STOCK, BACKORDER], example: IN_STOCK }
+ *
+ *     Weight:
+ *       type: object
+ *       properties:
+ *         value: { type: number, minimum: 0, example: 0.25 }
+ *         unit: { type: string, enum: [g, kg, oz, lb], example: kg }
+ *
+ *     Dimensions:
+ *       type: object
+ *       properties:
+ *         length: { type: number, minimum: 0, example: 30 }
+ *         width: { type: number, minimum: 0, example: 24 }
+ *         height: { type: number, minimum: 0, example: 3 }
+ *         unit: { type: string, enum: [mm, cm, m, in], example: cm }
+ *
+ *     CatalogSeo:
+ *       type: object
+ *       properties:
+ *         title: { type: string, example: Nike Sports T-Shirt }
+ *         description: { type: string, example: Buy the Nike Sports T-Shirt online. }
+ *         keywords: { type: array, items: { type: string }, example: [nike, sportswear] }
+ *         canonicalUrl: { type: string, format: uri, example: https://gadgetsimp.dev/products/nike-sports-t-shirt }
+ *         noIndex: { type: boolean, example: false }
+ *         noFollow: { type: boolean, example: false }
+ *         ogTitle: { type: string, example: Nike Sports T-Shirt }
+ *         ogDescription: { type: string, example: Buy the Nike Sports T-Shirt online. }
+ *         ogImage: { type: string, example: https://cdn.example.com/products/nike-shirt.webp }
+ *         twitterTitle: { type: string, example: Nike Sports T-Shirt }
+ *         twitterDescription: { type: string, example: Buy the Nike Sports T-Shirt online. }
+ *         twitterImage: { type: string, example: https://cdn.example.com/products/nike-shirt.webp }
+ *
  *     SuccessResponse:
  *       type: object
  *       properties:

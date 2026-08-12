@@ -53,6 +53,11 @@ const definition = {
     { name: "Auth", description: "Registration, login, token rotation, logout" },
     { name: "Users", description: "Profile management and admin user administration" },
     { name: "Media", description: "Cloudinary-backed file uploads" },
+    { name: "Products", description: "Public catalog discovery and admin product management" },
+    { name: "Categories", description: "Hierarchical catalog taxonomy and attribute configuration" },
+    { name: "Brands", description: "Global product brands" },
+    { name: "Attributes", description: "Reusable metadata-driven catalog attributes" },
+    { name: "Variations", description: "Generated purchasable SKUs, pricing and stock" },
   ],
   components: {
     securitySchemes: {
