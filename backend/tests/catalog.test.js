@@ -108,7 +108,7 @@ describe("catalog", () => {
         productType: "VARIABLE",
         status: "ACTIVE",
         visibility: "PUBLIC",
-        attributes: { material: "cotton" },
+        attributes: [{ title: "General Info", options: { material: "cotton" } }],
         variationOptions: { color: ["black", "white"], size: ["m", "l"] },
         sellingPrice: 1299, thumbnail: { alt: "Sports T-Shirt", src: "https://cdn.example.com/shirt.webp" },
       },
@@ -160,7 +160,7 @@ describe("catalog", () => {
         productType: "VARIABLE",
         status: "ACTIVE",
         visibility: "PUBLIC",
-        attributes: { material: "cotton" },
+        attributes: [{ title: "General Info", options: { material: "cotton" } }],
         variationOptions: { color: ["black"], size: ["m"] },
         sellingPrice: 1299, thumbnail: { alt: "Sports T-Shirt", src: "https://cdn.example.com/shirt.webp" },
       },
@@ -203,7 +203,7 @@ describe("catalog", () => {
         productType: "VARIABLE",
         status: "ACTIVE",
         visibility: "PUBLIC",
-        attributes: { material: "cotton" },
+        attributes: [{ title: "General Info", options: { material: "cotton" } }],
         variationOptions: { color: ["black", "white"], size: ["m", "l"] },
         sellingPrice: 1299, thumbnail: { alt: "Sports T-Shirt", src: "https://cdn.example.com/shirt.webp" },
       },
@@ -237,7 +237,7 @@ describe("catalog", () => {
         productType: "VARIABLE",
         status: "ACTIVE",
         visibility: "PUBLIC",
-        attributes: { material: "cotton" },
+        attributes: [{ title: "General Info", options: { material: "cotton" } }],
         variationOptions: { color: ["black", "white"], size: ["m", "l"] },
         sellingPrice: 1299, thumbnail: { alt: "Sports T-Shirt", src: "https://cdn.example.com/shirt.webp" },
       },
@@ -302,7 +302,7 @@ describe("product section patches", () => {
         productType: "VARIABLE",
         status: "ACTIVE",
         visibility: "PUBLIC",
-        attributes: { material: "cotton" },
+        attributes: [{ title: "General Info", options: { material: "cotton" } }],
         variationOptions: { color: ["black"], size: ["m"] },
         sellingPrice: 1000,
         originalPrice: 1500,
@@ -396,7 +396,12 @@ describe("product section patches", () => {
     const { product } = await seedProduct();
 
     await expect(
-      productService.patchSection(product.id, "attributes", { attributes: { bogus: "x" } }, actor)
+      productService.patchSection(
+        product.id,
+        "attributes",
+        { attributes: [{ title: "General Info", options: { bogus: "x" } }] },
+        actor
+      )
     ).rejects.toMatchObject({ code: "PRODUCT_ATTRIBUTE_INVALID" });
   });
 
@@ -411,7 +416,9 @@ describe("product section patches", () => {
     );
 
     expect(patched.tags).toEqual(["sale", "summer"]);
-    expect(patched.attributes).toMatchObject({ material: "cotton" });
+    expect(patched.attributes).toEqual([
+      { title: "General Info", options: { material: "cotton" } },
+    ]);
   });
 
   it("fills missing SEO fields from the merged product", async () => {
@@ -501,7 +508,7 @@ describe("public shop", () => {
         name: "Live Tee", slug: "live-tee", description: "on sale",
         categoryIds: [String(category._id)], brandId: String(brand._id),
         productType: "VARIABLE", status: "ACTIVE", visibility: "PUBLIC",
-        attributes: { material: "cotton" }, variationOptions: { color: ["black"] },
+        attributes: [{ title: "General Info", options: { material: "cotton" } }], variationOptions: { color: ["black"] },
         sellingPrice: 1000, originalPrice: 1500,
         thumbnail: { alt: "t", src: "https://cdn.example.com/a.webp" },
       },
@@ -513,7 +520,7 @@ describe("public shop", () => {
         name: "Draft Tee", slug: "draft-tee", description: "not yet",
         categoryIds: [String(category._id)], brandId: String(brand._id),
         productType: "VARIABLE", status: "DRAFT", visibility: "PUBLIC",
-        attributes: { material: "cotton" }, variationOptions: { color: ["black"] },
+        attributes: [{ title: "General Info", options: { material: "cotton" } }], variationOptions: { color: ["black"] },
         sellingPrice: 900,
         thumbnail: { alt: "d", src: "https://cdn.example.com/b.webp" },
       },
@@ -695,7 +702,7 @@ describe("showInHome and storefront categories", () => {
         name: "Live Tee", slug: "home-tee", description: "d",
         categoryIds: [String(child._id)], brandId: String(brand._id),
         productType: "VARIABLE", status: "ACTIVE", visibility: "PUBLIC",
-        attributes: { material: "cotton" }, variationOptions: { color: ["black"] },
+        attributes: [{ title: "General Info", options: { material: "cotton" } }], variationOptions: { color: ["black"] },
         sellingPrice: 1000,
         thumbnail: { alt: "t", src: "https://cdn.example.com/a.webp" },
       },

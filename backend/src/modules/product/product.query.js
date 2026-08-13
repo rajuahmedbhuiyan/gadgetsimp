@@ -160,7 +160,16 @@ function productFilterMatch(filters) {
   for (const filter of filters) {
     if (filter.source === ATTRIBUTE_SOURCE.ENTITY) match[filter.field] = valueCondition(filter);
     if (filter.source === ATTRIBUTE_SOURCE.PRODUCT) {
-      match[`attributes.${filter.key}`] = valueCondition(filter);
+      /**
+       * `attributes` is an array of titled groups, so this path reaches into
+       * every group at once: Mongo matches the document if *any* group carries
+       * the key with a matching value. Which group a spec was filed under is a
+       * display decision and must not change what a filter finds.
+       *
+       * The validator keeps keys unique across groups, so "any group" can only
+       * ever be one group - without that rule this match would be ambiguous.
+       */
+      match[`attributes.options.${filter.key}`] = valueCondition(filter);
     }
   }
   return match;
@@ -346,6 +355,36 @@ function distinctProductCounts(valuePath) {
   ];
 }
 
+/**
+ * Facet counts for a product attribute, which now lives inside a group.
+ *
+ * Two unwinds, and both are needed:
+ *
+ *   1. `$attributes` - the groups array. Unwinding it first means the value
+ *      lookup below never has to traverse an array, which is the case
+ *      `$unwind` on a dotted path cannot express reliably.
+ *   2. the value itself - an attribute may hold a list ("fits: [slim,
+ *      regular]") and each entry is its own facet value. `$unwind` on a scalar
+ *      passes it through unchanged, so this is safe either way.
+ *
+ * The double `$group` is what makes the count *products*, not values: the
+ * first collapses to distinct (value, product) pairs, so a product listing the
+ * same value twice is still counted once.
+ */
+function productAttributeCounts(key) {
+  const path = `$attributes.options.${key}`;
+
+  return [
+    { $unwind: "$attributes" },
+    { $match: { [`attributes.options.${key}`]: { $ne: null } } },
+    { $unwind: path },
+    { $group: { _id: { value: path, productId: "$_id" } } },
+    { $group: { _id: "$_id.value", count: { $sum: 1 } } },
+    { $sort: { count: -1, _id: 1 } },
+    { $limit: 500 },
+  ];
+}
+
 function facetPipeline(attribute, allFilters) {
   const otherFilters = allFilters.filter((filter) => filter.key !== attribute.key);
   const stages = applyFilters(otherFilters);
@@ -379,10 +418,12 @@ function facetPipeline(attribute, allFilters) {
     return stages;
   }
 
-  const path = attribute.source === ATTRIBUTE_SOURCE.ENTITY
-    ? `$${attribute.key}Id`
-    : `$attributes.${attribute.key}`;
-  stages.push(...distinctProductCounts(path));
+  if (attribute.source === ATTRIBUTE_SOURCE.ENTITY) {
+    stages.push(...distinctProductCounts(`$${attribute.key}Id`));
+    return stages;
+  }
+
+  stages.push(...productAttributeCounts(attribute.key));
   return stages;
 }
 

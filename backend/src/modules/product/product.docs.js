@@ -30,7 +30,29 @@
  *         visibility: { type: string, enum: [PUBLIC, HIDDEN], example: PUBLIC }
  *         featured: { type: boolean, example: true }
  *         tags: { type: array, items: { type: string }, example: [sportswear, training] }
- *         attributes: { type: object, additionalProperties: true, example: { material: cotton, fit: regular } }
+ *         attributes:
+ *           type: array
+ *           maxItems: 20
+ *           description: >
+ *             The product's spec table, as an **ordered list of titled
+ *             groups** - the order is the display order. Each group is a block
+ *             of the table, e.g. "General Info" then "Care".
+ *
+ *
+ *             **A key may appear in only one group.** Filters query
+ *             `attributes.options.<key>` across every group, so the same key in
+ *             two groups would make "which value" ambiguous at query time; it
+ *             is rejected with 422. Group titles must be unique too.
+ *           items:
+ *             type: object
+ *             required: [title, options]
+ *             properties:
+ *               title: { type: string, maxLength: 120, example: General Info }
+ *               options:
+ *                 type: object
+ *                 description: Attribute key to value. A value may be a scalar or a list.
+ *                 additionalProperties: true
+ *                 example: { material: cotton, fit: regular }
  *         shipping:
  *           type: object
  *           properties:
@@ -129,7 +151,11 @@
  *             visibility: PUBLIC
  *             featured: true
  *             tags: [sportswear, training]
- *             attributes: { material: cotton, fit: regular }
+ *             attributes:
+ *               - title: General Info
+ *                 options: { material: cotton, fit: regular }
+ *               - title: Care
+ *                 options: { wash: cold, iron: low }
  *             variations:
  *               - options: { color: black, size: m }
  *                 sku: NIKE-SPORTS-BLACK-M
@@ -323,9 +349,35 @@
  *             type: object
  *             minProperties: 1
  *             properties:
- *               attributes: { type: object, additionalProperties: true, example: { material: cotton, fit: regular } }
+ *               attributes:
+ *                 type: array
+ *                 maxItems: 20
+ *                 description: >
+ *                   The product's spec table, as an **ordered list of titled
+ *                   groups** - the order is the display order. Each group is a block
+ *                   of the table, e.g. "General Info" then "Care".
+ *
+ *
+ *                   **A key may appear in only one group.** Filters query
+ *                   `attributes.options.<key>` across every group, so the same key in
+ *                   two groups would make "which value" ambiguous at query time; it
+ *                   is rejected with 422. Group titles must be unique too.
+ *                 items:
+ *                   type: object
+ *                   required: [title, options]
+ *                   properties:
+ *                     title: { type: string, maxLength: 120, example: General Info }
+ *                     options:
+ *                       type: object
+ *                       description: Attribute key to value. A value may be a scalar or a list.
+ *                       additionalProperties: true
+ *                       example: { material: cotton, fit: regular }
  *               tags: { type: array, items: { type: string }, example: [sportswear, training] }
- *           example: { attributes: { material: cotton }, tags: [sportswear, training] }
+ *           example:
+ *             attributes:
+ *               - title: General Info
+ *                 options: { material: cotton }
+ *             tags: [sportswear, training]
  *     responses:
  *       200: { description: Attributes and tags updated. }
  *       404: { $ref: '#/components/responses/NotFound' }
@@ -493,7 +545,11 @@
  *             visibility: PUBLIC
  *             featured: true
  *             tags: [sportswear, training]
- *             attributes: { material: cotton, fit: regular }
+ *             attributes:
+ *               - title: General Info
+ *                 options: { material: cotton, fit: regular }
+ *               - title: Care
+ *                 options: { wash: cold, iron: low }
  *             variationOptions: { color: [black, white], size: [m, l] }
  *             shipping:
  *               requiresShipping: true

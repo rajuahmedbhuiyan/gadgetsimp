@@ -81,24 +81,61 @@ function validateValue(attribute, value, field) {
   }
 }
 
-function validateProductAttributes(context, attributes, entityValues) {
-  for (const [key, value] of Object.entries(attributes ?? {})) {
+/**
+ * Flattens the grouped attributes into the key/value pairs the category rules
+ * are expressed in, keeping each one's position so an error can point at the
+ * exact group it came from.
+ *
+ * Accepts either a hydrated document's groups (where `options` is a Mongoose
+ * Map) or a validated request body's (where it is a plain object), so callers
+ * do not have to convert before validating.
+ */
+function attributeEntries(groups) {
+  const entries = [];
+
+  for (const [index, group] of (groups ?? []).entries()) {
+    const options =
+      group?.options instanceof Map ? Object.fromEntries(group.options) : group?.options ?? {};
+
+    for (const [key, value] of Object.entries(options)) {
+      entries.push({ key, value, field: `attributes.${index}.options.${key}` });
+    }
+  }
+
+  return entries;
+}
+
+function validateProductAttributes(context, groups, entityValues) {
+  const entries = attributeEntries(groups);
+
+  // Grouping is presentation; the category rules below are about which keys
+  // exist and what they hold, so they run against the flattened view.
+  const values = new Map(entries.map((entry) => [entry.key, entry.value]));
+
+  for (const { key, value, field } of entries) {
     const metadata = context.byKey.get(key);
     if (!metadata || metadata.source !== ATTRIBUTE_SOURCE.PRODUCT) {
       throw ApiError.unprocessable(`Attribute '${key}' is not a product attribute for this category`, {
         code: "PRODUCT_ATTRIBUTE_INVALID",
-        errors: [{ field: `attributes.${key}`, message: "Attribute is not assigned to the category" }],
+        errors: [{ field, message: "Attribute is not assigned to the category" }],
       });
     }
-    validateValue(metadata, value, `attributes.${key}`);
+    validateValue(metadata, value, field);
   }
 
   for (const metadata of context.attributes) {
     if (!metadata.categoryConfiguration.required) continue;
-    if (metadata.source === ATTRIBUTE_SOURCE.PRODUCT && !hasValue(attributes?.[metadata.key])) {
+    if (metadata.source === ATTRIBUTE_SOURCE.PRODUCT && !hasValue(values.get(metadata.key))) {
       throw ApiError.unprocessable(`${metadata.name} is required`, {
         code: "PRODUCT_ATTRIBUTE_REQUIRED",
-        errors: [{ field: `attributes.${metadata.key}`, message: "Required by the category" }],
+        errors: [
+          {
+            // No index to point at - the key is missing from every group, so
+            // the field is the collection and the message names what is absent.
+            field: "attributes",
+            message: `'${metadata.key}' is required by the category and is not set in any group`,
+          },
+        ],
       });
     }
     if (metadata.source === ATTRIBUTE_SOURCE.ENTITY) {
@@ -284,7 +321,7 @@ async function update(id, input, actor) {
 
   const categoryIds = input.categoryIds ?? current.categoryIds;
   const context = await categoryContext(categoryIds);
-  const attributes = input.attributes ?? Object.fromEntries(current.attributes ?? []);
+  const attributes = input.attributes ?? current.attributes;
   const entityValues = { brandId: input.brandId ?? current.brandId };
   await validateBrand(entityValues.brandId);
   validateProductAttributes(context, attributes, entityValues);
@@ -348,7 +385,7 @@ async function patchSection(id, section, input, actor) {
     const brandId = "brandId" in input ? input.brandId : current.brandId;
 
     await validateBrand(brandId);
-    validateProductAttributes(context, Object.fromEntries(current.attributes ?? []), { brandId });
+    validateProductAttributes(context, current.attributes, { brandId });
   }
 
   if (section === "pricing") {
@@ -372,7 +409,7 @@ async function patchSection(id, section, input, actor) {
 
   if (section === "attributes") {
     const context = await categoryContext(current.categoryIds);
-    const attributes = input.attributes ?? Object.fromEntries(current.attributes ?? []);
+    const attributes = input.attributes ?? current.attributes;
     validateProductAttributes(context, attributes, { brandId: current.brandId });
   }
 

@@ -20,7 +20,71 @@ const {
 const attributeKey = z.string().regex(/^[a-z][a-z0-9_]*$/).max(80);
 const scalarValue = z.union([z.string().trim().max(500), z.number(), z.boolean()]);
 const attributeValue = z.union([scalarValue, z.array(scalarValue).min(1).max(100)]);
-const dynamicAttributes = z.record(attributeKey, attributeValue);
+
+/**
+ * One titled block of a product's spec table, e.g.
+ * `{ title: "General Info", options: { material: "cotton", fit: "regular" } }`.
+ */
+const attributeGroup = z
+  .object({
+    title: z.string().trim().min(1, "A group needs a title").max(120),
+    options: z
+      .record(attributeKey, attributeValue)
+      .refine((options) => Object.keys(options).length > 0, {
+        message: "A group needs at least one option",
+      }),
+  })
+  .strict();
+
+/**
+ * Product attributes: an **ordered list of titled groups**, not a flat map.
+ *
+ * The order is the display order of the spec table, which is why this is an
+ * array - an object would leave the sections at the mercy of key ordering.
+ *
+ * The two `superRefine` rules below are load-bearing, not hygiene:
+ *
+ *   - **Keys must be unique across every group.** Filters query
+ *     `attributes.options.<key>`, which matches if *any* group carries that
+ *     key. The same key in two groups makes "which value" ambiguous at query
+ *     time, and the product silently filters wrong rather than failing.
+ *   - **Titles must be unique.** Two blocks both called "General Info" is a
+ *     data-entry slip that renders as a duplicated heading, and is free to
+ *     catch here.
+ */
+const dynamicAttributes = z
+  .array(attributeGroup)
+  .max(20, "A product may have at most 20 attribute groups")
+  .superRefine((groups, ctx) => {
+    const seenTitles = new Map();
+    const seenKeys = new Map();
+
+    groups.forEach((group, index) => {
+      const title = group.title.toLowerCase();
+
+      if (seenTitles.has(title)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "title"],
+          message: `Duplicate group title - already used by group ${seenTitles.get(title)}`,
+        });
+      } else {
+        seenTitles.set(title, index);
+      }
+
+      for (const key of Object.keys(group.options)) {
+        if (seenKeys.has(key)) {
+          ctx.addIssue({
+            code: "custom",
+            path: [index, "options", key],
+            message: `Attribute '${key}' is already set in group ${seenKeys.get(key)} - a key may only appear once across all groups`,
+          });
+        } else {
+          seenKeys.set(key, index);
+        }
+      }
+    });
+  });
 const variationOptions = z.record(
   attributeKey,
   z.array(z.string().trim().min(1).max(120)).min(1).max(100)
@@ -56,7 +120,7 @@ const shape = {
   visibility: z.enum(PRODUCT_VISIBILITY_VALUES).optional(),
   featured: z.boolean().default(false),
   tags: z.array(z.string().trim().min(1).max(80)).max(100).default([]),
-  attributes: dynamicAttributes.default({}),
+  attributes: dynamicAttributes.default([]),
   currency: z.literal("BDT").default("BDT"),
   sellingPrice: z.coerce.number().min(0),
   originalPrice: z.coerce.number().min(0).optional(),
