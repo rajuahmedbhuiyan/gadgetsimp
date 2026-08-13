@@ -11,6 +11,7 @@ const {
   fallbackLink,
   paragraph: p,
   mutedParagraph: pMuted,
+  greetingName,
 } = require("../../shared/emailLayout");
 
 /**
@@ -44,14 +45,15 @@ function formatDuration(minutes) {
   return `${hours} hour${hours === 1 ? "" : "s"}`;
 }
 
-function verificationEmail({ firstName, token }) {
+function verificationEmail({ fullName, token }) {
+  const name = greetingName(fullName);
   const url = verificationUrl(token);
   const validFor = formatDuration(EMAIL_VERIFICATION_TTL_MINUTES);
 
   return {
     subject: "Confirm your email to finish signing up",
     text: [
-      `Hi ${firstName},`,
+      `Hi ${name},`,
       "",
       "Confirm your email address to finish creating your GadgetSimp account:",
       "",
@@ -65,7 +67,7 @@ function verificationEmail({ firstName, token }) {
     ].join("\n"),
     html: layout({
       preheader: "One click to finish setting up your GadgetSimp account.",
-      heading: `Hi ${firstName}, confirm your email`,
+      heading: `Hi ${name}, confirm your email`,
       body: `
         <p style="${p}">
           You are one step away from your GadgetSimp account. Tap the button below
@@ -94,14 +96,15 @@ function verificationEmail({ firstName, token }) {
  * them their purchase; not saying the second makes the password modal look
  * like an unexpected demand for a credential.
  */
-function checkoutAccountEmail({ firstName, orderNumber, token }) {
+function checkoutAccountEmail({ fullName, orderNumber, token }) {
+  const name = greetingName(fullName);
   const url = verificationUrl(token);
   const validFor = formatDuration(EMAIL_VERIFICATION_TTL_MINUTES);
 
   return {
     subject: `Confirm your email to track order #${orderNumber}`,
     text: [
-      `Hi ${firstName},`,
+      `Hi ${name},`,
       "",
       `Thanks for your order - #${orderNumber} is confirmed and on its way, whatever you do next.`,
       "",
@@ -118,7 +121,7 @@ function checkoutAccountEmail({ firstName, orderNumber, token }) {
     ].join("\n"),
     html: layout({
       preheader: `Order #${orderNumber} is confirmed. Confirm your email to set up your account.`,
-      heading: `Thanks, ${firstName}!`,
+      heading: `Thanks, ${name}!`,
       body: `
         <p style="${p}">
           Your order <strong style="color:#1a1a1a;">#${orderNumber}</strong> is confirmed
@@ -138,11 +141,13 @@ function checkoutAccountEmail({ firstName, orderNumber, token }) {
   };
 }
 
-function welcomeEmail({ firstName }) {
+function welcomeEmail({ fullName }) {
+  const name = greetingName(fullName);
+
   return {
     subject: "Your GadgetSimp account is ready",
     text: [
-      `Hi ${firstName},`,
+      `Hi ${name},`,
       "",
       "Your email is confirmed and your GadgetSimp account is live. Happy shopping.",
       "",
@@ -152,7 +157,7 @@ function welcomeEmail({ firstName }) {
     ].join("\n"),
     html: layout({
       preheader: "Your account is confirmed and ready to use.",
-      heading: `Welcome aboard, ${firstName}`,
+      heading: `Welcome aboard, ${name}`,
       body: `
         <p style="${p}">
           Your email is confirmed and your account is live. Browse the latest
@@ -165,13 +170,14 @@ function welcomeEmail({ firstName }) {
   };
 }
 
-function existingAccountEmail({ firstName }) {
+function existingAccountEmail({ fullName }) {
+  const name = greetingName(fullName);
   const loginUrl = `${appUrl()}/login`;
 
   return {
     subject: "Someone tried to sign up with your email",
     text: [
-      `Hi ${firstName},`,
+      `Hi ${name},`,
       "",
       "Someone just tried to create a GadgetSimp account with this email address,",
       "but an account already exists. If that was you, sign in instead:",
@@ -185,7 +191,7 @@ function existingAccountEmail({ firstName }) {
     ].join("\n"),
     html: layout({
       preheader: "An account already exists for this address.",
-      heading: `Hi ${firstName}`,
+      heading: `Hi ${name}`,
       body: `
         <p style="${p}">
           Someone just tried to create a GadgetSimp account with this email
@@ -202,14 +208,15 @@ function existingAccountEmail({ firstName }) {
   };
 }
 
-function passwordResetEmail({ firstName, token }) {
+function passwordResetEmail({ fullName, token }) {
+  const name = greetingName(fullName);
   const url = resetUrl(token);
   const validFor = formatDuration(PASSWORD_RESET_TTL_MINUTES);
 
   return {
     subject: "Reset your GadgetSimp password",
     text: [
-      `Hi ${firstName},`,
+      `Hi ${name},`,
       "",
       "We received a request to reset your GadgetSimp password. Use this link:",
       "",
@@ -224,7 +231,7 @@ function passwordResetEmail({ firstName, token }) {
     ].join("\n"),
     html: layout({
       preheader: `Reset your password. Link valid for ${validFor}.`,
-      heading: `Hi ${firstName}, reset your password`,
+      heading: `Hi ${name}, reset your password`,
       body: `
         <p style="${p}">
           We received a request to reset the password on your GadgetSimp account.
@@ -246,13 +253,14 @@ function passwordResetEmail({ firstName, token }) {
  * victim notice an account takeover, so it goes out on every change - not
  * only the ones the user initiated.
  */
-function passwordChangedEmail({ firstName }) {
+function passwordChangedEmail({ fullName }) {
+  const name = greetingName(fullName);
   const loginUrl = `${appUrl()}/login`;
 
   return {
     subject: "Your GadgetSimp password was changed",
     text: [
-      `Hi ${firstName},`,
+      `Hi ${name},`,
       "",
       "Your GadgetSimp password has just been changed, and every device has",
       "been signed out.",
@@ -267,7 +275,7 @@ function passwordChangedEmail({ firstName }) {
     ].join("\n"),
     html: layout({
       preheader: "Your password was changed and all devices were signed out.",
-      heading: `Hi ${firstName}, your password was changed`,
+      heading: `Hi ${name}, your password was changed`,
       body: `
         <p style="${p}">
           Your GadgetSimp password has just been changed, and every device has

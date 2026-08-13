@@ -10,8 +10,7 @@ const { generatePassword } = require("../src/shared/generatePassword");
 const app = createApp();
 
 const newUser = (overrides = {}) => ({
-  firstName: "Nadia",
-  lastName: "Khan",
+  fullName: "Nadia Khan",
   email: uniqueEmail("created"),
   ...overrides,
 });

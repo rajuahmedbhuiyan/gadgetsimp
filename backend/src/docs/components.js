@@ -153,12 +153,12 @@
  *           type: integer
  *           description: Sequential integer id, assigned from an atomic counter.
  *           example: 1003
- *         firstName: { type: string, example: Raju }
- *         lastName: { type: string, example: Ahmed }
  *         fullName:
  *           type: string
- *           readOnly: true
- *           description: Derived from firstName and lastName.
+ *           maxLength: 120
+ *           description: >
+ *             One name field, not a first/last pair - a mononym is a name, and
+ *             checkout and the social providers hand over a single string.
  *           example: Raju Ahmed
  *         email: { type: string, format: email, example: raju@example.com }
  *         role: { $ref: '#/components/schemas/Role' }
@@ -200,8 +200,8 @@
  *           description: >
  *             Short-lived JWT (15 min). Send as `Authorization: Bearer <token>`.
  *
- *             Its payload carries `sub`, `role`, `tokenVersion`, `firstName`,
- *             `lastName`, `email` and `phone` - a convenience copy so a
+ *             Its payload carries `sub`, `role`, `tokenVersion`, `fullName`,
+ *             `email` and `phone` - a convenience copy so a
  *             frontend can render a header without calling `/auth/me`. Two
  *             caveats: a JWT is signed, not encrypted, so anyone holding it
  *             can read those values; and they are a snapshot that can go stale

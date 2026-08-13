@@ -133,8 +133,8 @@ stolen and drops *every* session for that user (`REFRESH_TOKEN_REUSED`). So:
 never fire two refreshes concurrently — de-duplicate them (see the client
 below) or a race will sign your user out.
 
-The access token payload carries `sub`, `email`, `firstName`, `lastName`,
-`mobile` and `role`, so you can render a header without an extra call. Do not
+The access token payload carries `sub`, `email`, `fullName`,
+`phone` and `role`, so you can render a header without an extra call. Do not
 trust it for authorisation decisions that matter — the server re-checks the
 user on every request.
 
@@ -513,7 +513,7 @@ only mailbox access, so it is not treated as a login.
 const { data, code } = await api("/auth/verify-email", { method: "POST", body: { token } });
 
 if (code === "REQUIRED_PASSWORD") {
-  openPasswordModal(data.registrationToken);   // data also has email, firstName, lastName
+  openPasswordModal(data.registrationToken);   // data also has email, fullName
 } else {
   setAccessToken(data.accessToken);            // normal signup: already an account
 }
@@ -847,8 +847,7 @@ The emailed link is valid for **10 minutes**. It is a bearer credential that cre
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `firstName` | string | **yes** | maxLength 60. |
-| `lastName` | string | **yes** | maxLength 60. |
+| `fullName` | string | **yes** | maxLength 120. |
 | `email` | string | **yes** |  |
 | `password` | string | **yes** | At least 8 characters with an uppercase letter, a lowercase letter and a digit. minLength 8. |
 | `phone` | string | no |  |
@@ -1246,8 +1245,7 @@ Accepts name, phone and `image` only. The schema is strict, so sending `role`, `
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `firstName` | string | no |  |
-| `lastName` | string | no |  |
+| `fullName` | string | no | maxLength 120. |
 | `phone` | string | no |  |
 | `image` | string | no | Profile picture URL. |
 
@@ -1287,7 +1285,7 @@ Soft-deleted accounts are excluded unless `includeDeleted` is true, or `status` 
 | `emailVerified` | boolean | no |  |
 | `createdFrom` | string | no |  |
 | `createdTo` | string | no |  |
-| `sortBy` | `createdAt` \| `lastLoginAt` \| `firstName` \| `lastName` \| `email` \| `role` \| `status` | no | Default `"createdAt"`. |
+| `sortBy` | `createdAt` \| `lastLoginAt` \| `fullName` \| `email` \| `role` \| `status` | no | Default `"createdAt"`. |
 | `sortOrder` | `asc` \| `desc` | no | Default `"desc"`. |
 | `includeDeleted` | boolean | no | Include soft-deleted accounts. Default `false`. |
 
@@ -1305,7 +1303,7 @@ Soft-deleted accounts are excluded unless `includeDeleted` is true, or `status` 
     "ROLE_OWNER"
   ],
   "status": "ACTIVE",
-  "sortBy": "firstName",
+  "sortBy": "fullName",
   "sortOrder": "asc"
 }
 ```
@@ -1349,8 +1347,7 @@ The role must be **below** the creator's own rank, the same rule `/users/{id}/ro
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `firstName` | string | **yes** |  |
-| `lastName` | string | **yes** |  |
+| `fullName` | string | **yes** | maxLength 120. |
 | `email` | string | **yes** |  |
 | `password` | string | no | Optional. Generated automatically when omitted. minLength 8. |
 | `role` | `ROLE_CUSTOMER` \| `ROLE_MODERATOR` \| `ROLE_ADMIN` \| `ROLE_OWNER` | no | Roles are ranked, and permissions accumulate upwards: `ROLE_CUSTOMER` < `ROLE_MODERATOR` < `ROLE_ADMIN` < `ROLE_OWNER`. An endpoint documented as requiring `ROLE_ADMIN` also admits `ROLE_OWNER`. Nobody may assign a role at or above their own rank. |

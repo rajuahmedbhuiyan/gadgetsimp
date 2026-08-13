@@ -52,8 +52,7 @@ function signAccessToken(user) {
 
       // Client-facing identity, so a frontend can render a header without a
       // round trip to /auth/me on every page load.
-      firstName: user.firstName,
-      lastName: user.lastName,
+      fullName: user.fullName,
       email: user.email,
       phone: user.phone ?? null,
     },

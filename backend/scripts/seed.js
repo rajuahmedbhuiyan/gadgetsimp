@@ -83,8 +83,7 @@ async function seed() {
   // Seeded accounts skip the email-verification flow deliberately - they are
   // created already verified so the API is usable without an inbox.
   const owner = await User.create({
-    firstName: "Site",
-    lastName: "Owner",
+    fullName: "Site Owner",
     email: "owner@gadgetsimp.dev",
     password: "Owner1234",
     role: ROLES.OWNER,
@@ -93,8 +92,7 @@ async function seed() {
   });
 
   const admin = await User.create({
-    firstName: "Store",
-    lastName: "Admin",
+    fullName: "Store Admin",
     email: "admin@gadgetsimp.dev",
     password: "Admin1234",
     role: ROLES.ADMIN,
@@ -102,8 +100,7 @@ async function seed() {
   });
 
   await User.create({
-    firstName: "Mina",
-    lastName: "Rahman",
+    fullName: "Mina Rahman",
     email: "moderator@gadgetsimp.dev",
     password: "Moderator1234",
     role: ROLES.MODERATOR,
@@ -111,8 +108,7 @@ async function seed() {
   });
 
   await User.create({
-    firstName: "Raju",
-    lastName: "Ahmed",
+    fullName: "Raju Ahmed",
     email: "customer@gadgetsimp.dev",
     password: "Customer1234",
     role: ROLES.CUSTOMER,

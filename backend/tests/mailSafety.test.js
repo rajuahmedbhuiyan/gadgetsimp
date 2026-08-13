@@ -56,7 +56,7 @@ describe("tests can never send real email", () => {
 
     await request(app)
       .post(`${API}/auth/register`)
-      .send({ firstName: "Mail", lastName: "Safety", email, password: "Str0ngPass" });
+      .send({ fullName: "Mail Safety", email, password: "Str0ngPass" });
 
     // Present in the in-memory outbox, which only the log transport populates.
     expect(mailer.getSentMessages().some((message) => message.to === email)).toBe(true);

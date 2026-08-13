@@ -26,13 +26,12 @@ function uniqueEmail(prefix = "user") {
  */
 async function createUserAndLogin(
   app,
-  { role = ROLES.CUSTOMER, email, password = "Passw0rd!", firstName = "Test", lastName = "User" } = {}
+  { role = ROLES.CUSTOMER, email, password = "Passw0rd!", fullName = "Test User" } = {}
 ) {
   const address = email ?? uniqueEmail(role.toLowerCase());
 
   await User.create({
-    firstName,
-    lastName,
+    fullName,
     email: address,
     password,
     role,

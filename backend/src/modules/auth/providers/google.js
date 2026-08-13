@@ -46,7 +46,7 @@ function getClient() {
  * Verifies a Google ID token and returns a normalised profile.
  *
  * @param {string} token The `credential` (ID token) from Google Identity Services.
- * @returns {Promise<{provider: string, providerId: string, email: string|null, firstName: string, lastName: string, avatarUrl: string|null}>}
+ * @returns {Promise<{provider: string, providerId: string, email: string|null, fullName: string, avatarUrl: string|null}>}
  */
 async function verifyToken(token) {
   let payload;
@@ -107,13 +107,21 @@ async function verifyToken(token) {
     provider,
     providerId: String(payload.sub),
     email: payload.email ? String(payload.email).toLowerCase().trim() : null,
-    // `given_name`/`family_name` are absent on some accounts; `name` is the
-    // fallback, and a placeholder after that, since both are required fields.
-    firstName: payload.given_name?.trim() || payload.name?.split(" ")[0]?.trim() || "Google",
-    lastName:
-      payload.family_name?.trim() ||
-      payload.name?.split(" ").slice(1).join(" ").trim() ||
-      "User",
+    /**
+     * `name` is the display name Google itself uses, so it is preferred over
+     * re-joining `given_name` and `family_name` - those are absent on some
+     * accounts, and in the name orders that put the family name first,
+     * concatenating them produces a name the person does not go by. The pair
+     * is the fallback for the accounts that lack `name`, and a placeholder
+     * after that, since the field is required.
+     */
+    fullName:
+      payload.name?.trim() ||
+      [payload.given_name, payload.family_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
+      "Google User",
     avatarUrl: payload.picture ?? null,
   };
 }

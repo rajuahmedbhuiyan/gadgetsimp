@@ -40,8 +40,7 @@
  *             type: object
  *             minProperties: 1
  *             properties:
- *               firstName: { type: string, example: Raju }
- *               lastName: { type: string, example: Ahmed }
+ *               fullName: { type: string, maxLength: 120, example: Raju Ahmed }
  *               phone: { type: string, example: "+8801712345678" }
  *               image:
  *                 type: string
@@ -124,7 +123,7 @@
  *               createdTo: { type: string, format: date-time, example: 2026-12-31 }
  *               sortBy:
  *                 type: string
- *                 enum: [createdAt, lastLoginAt, firstName, lastName, email, role, status]
+ *                 enum: [createdAt, lastLoginAt, fullName, email, role, status]
  *                 default: createdAt
  *               sortOrder: { type: string, enum: [asc, desc], default: desc }
  *               includeDeleted:
@@ -140,7 +139,7 @@
  *               value:
  *                 role: [ROLE_MODERATOR, ROLE_ADMIN, ROLE_OWNER]
  *                 status: ACTIVE
- *                 sortBy: firstName
+ *                 sortBy: fullName
  *                 sortOrder: asc
  *             search:
  *               summary: Search with a date range
@@ -197,10 +196,9 @@
  *         application/json:
  *           schema:
  *             type: object
- *             required: [firstName, lastName, email]
+ *             required: [fullName, email]
  *             properties:
- *               firstName: { type: string, example: Nadia }
- *               lastName: { type: string, example: Khan }
+ *               fullName: { type: string, maxLength: 120, example: Nadia Khan }
  *               email: { type: string, format: email, example: nadia@example.com }
  *               password:
  *                 type: string

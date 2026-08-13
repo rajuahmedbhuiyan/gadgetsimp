@@ -155,4 +155,25 @@ function layout({ preheader, heading, body, footerNote }) {
 </html>`;
 }
 
-module.exports = { layout, button, fallbackLink, codeBlock, paragraph, mutedParagraph };
+/**
+ * How to address someone in a greeting, given the one name field we store.
+ *
+ * The first word rather than the whole string: "Hi Raju" is how a person
+ * writes to another person, while "Hi Raju Ahmed Bhuiyan" reads like a form
+ * letter. This is presentation only - nothing is split on the way in, so a
+ * mononym greets by itself and nothing is ever guessed wrong on the stored
+ * record. Falls back to "there" so a greeting never reads "Hi ,".
+ */
+function greetingName(fullName) {
+  return String(fullName ?? "").trim().split(/\s+/)[0] || "there";
+}
+
+module.exports = {
+  layout,
+  button,
+  fallbackLink,
+  codeBlock,
+  paragraph,
+  mutedParagraph,
+  greetingName,
+};

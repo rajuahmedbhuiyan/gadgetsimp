@@ -19,8 +19,7 @@ const imageSchema = z.url("Enter a valid image URL").max(512);
 const createUser = {
   body: z
     .object({
-      firstName: nameSchema,
-      lastName: nameSchema,
+      fullName: nameSchema,
       email: emailSchema,
       /**
        * Optional by design. Omit it and the API generates one, emails it to
@@ -46,8 +45,7 @@ const updateProfile = {
   // instead of quietly believing it worked.
   body: z
     .object({
-      firstName: nameSchema.optional(),
-      lastName: nameSchema.optional(),
+      fullName: nameSchema.optional(),
       phone: phoneSchema.optional(),
       image: imageSchema.optional(),
     })
@@ -100,7 +98,7 @@ const filterUsers = {
       createdTo: z.coerce.date().optional(),
 
       sortBy: z
-        .enum(["createdAt", "lastLoginAt", "firstName", "lastName", "email", "role", "status"])
+        .enum(["createdAt", "lastLoginAt", "fullName", "email", "role", "status"])
         .default("createdAt"),
       sortOrder: z.enum(["asc", "desc"]).default("desc"),
 

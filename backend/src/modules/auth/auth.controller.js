@@ -87,8 +87,7 @@ async function verifyEmail(req, res) {
       data: {
         registrationToken: result.registrationToken,
         email: result.email,
-        firstName: result.firstName,
-        lastName: result.lastName,
+        fullName: result.fullName,
       },
     });
   }

@@ -10,8 +10,7 @@ const { ROLES } = require("../src/shared/constants");
 const app = createApp();
 
 const signup = (overrides = {}) => ({
-  firstName: "Raju",
-  lastName: "Ahmed",
+  fullName: "Raju Ahmed",
   email: uniqueEmail("signup"),
   password: "Str0ngPass",
   ...overrides,
@@ -89,7 +88,7 @@ describe("POST /auth/register - step 1", () => {
   });
 
   it("warns the real account holder, using their own name", async () => {
-    const body = signup({ firstName: "Genuine", lastName: "Owner" });
+    const body = signup({ fullName: "Genuine Owner" });
 
     await request(app).post(`${API}/auth/register`).send(body);
     await request(app)
@@ -99,7 +98,7 @@ describe("POST /auth/register - step 1", () => {
     // Someone else attempts to sign up with the same address.
     await request(app)
       .post(`${API}/auth/register`)
-      .send(signup({ email: body.email, firstName: "Impostor" }));
+      .send(signup({ email: body.email, fullName: "Impostor Person" }));
 
     const notice = lastMessageTo(body.email);
     expect(notice.subject).toMatch(/tried to sign up/i);
@@ -129,13 +128,23 @@ describe("POST /auth/register - step 1", () => {
     expect(response.status).toBe(422);
   });
 
-  it("requires both first and last name", async () => {
+  it("requires a name", async () => {
     const response = await request(app)
       .post(`${API}/auth/register`)
-      .send({ email: uniqueEmail(), password: "Str0ngPass", firstName: "Raju" });
+      .send({ email: uniqueEmail(), password: "Str0ngPass" });
 
     expect(response.status).toBe(422);
-    expect(response.body.errors.some((issue) => issue.field === "body.lastName")).toBe(true);
+    expect(response.body.errors.some((issue) => issue.field === "body.fullName")).toBe(true);
+  });
+
+  // A mononym is a name. Requiring a surname would force either a lie or a
+  // placeholder on a large share of real customers.
+  it("accepts a single-word name", async () => {
+    const response = await request(app)
+      .post(`${API}/auth/register`)
+      .send(signup({ fullName: "Rahim" }));
+
+    expect(response.status).toBe(202);
   });
 });
 
@@ -168,17 +177,14 @@ describe("POST /auth/verify-email - step 2", () => {
     expect(user.role).toBe(ROLES.CUSTOMER);
   });
 
-  it("exposes firstName, lastName and a derived fullName, and no addresses", async () => {
-    const { token } = await startSignup({ firstName: "Raju", lastName: "Ahmed" });
+  it("exposes fullName as a single stored field, and no addresses", async () => {
+    const { token } = await startSignup({ fullName: "Raju Ahmed" });
 
     const { body } = await request(app).post(`${API}/auth/verify-email`).send({ token });
 
-    expect(body.data.user).toMatchObject({
-      firstName: "Raju",
-      lastName: "Ahmed",
-      fullName: "Raju Ahmed",
-    });
-    expect(body.data.user).not.toHaveProperty("name");
+    expect(body.data.user).toMatchObject({ fullName: "Raju Ahmed" });
+    expect(body.data.user).not.toHaveProperty("firstName");
+    expect(body.data.user).not.toHaveProperty("lastName");
     expect(body.data.user).not.toHaveProperty("addresses");
   });
 

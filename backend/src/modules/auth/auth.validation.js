@@ -24,14 +24,19 @@ const emailSchema = z
   .trim()
   .toLowerCase();
 
-// Allows the letters, marks and joining characters real names actually use -
-// accents, apostrophes, hyphens - while excluding digits and punctuation that
-// only ever show up in junk signups.
+/**
+ * One name field, not a first/last pair - see `user.model` for why.
+ *
+ * Allows the letters, marks and joining characters real names actually use -
+ * accents, apostrophes, hyphens, and the spaces between however many parts a
+ * name has - while excluding digits and punctuation that only ever show up in
+ * junk signups. A single word is valid: a mononym is a name.
+ */
 const nameSchema = z
   .string()
   .trim()
   .min(1, "Required")
-  .max(60, "Must be at most 60 characters")
+  .max(120, "Must be at most 120 characters")
   .regex(/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u, "Enter a valid name");
 
 const phoneSchema = z
@@ -42,8 +47,7 @@ const phoneSchema = z
 const register = {
   body: z
     .object({
-      firstName: nameSchema,
-      lastName: nameSchema,
+      fullName: nameSchema,
       email: emailSchema,
       password: passwordSchema,
       phone: phoneSchema.optional(),

@@ -7,6 +7,7 @@ const {
   codeBlock,
   paragraph: p,
   mutedParagraph: pMuted,
+  greetingName,
 } = require("../../shared/emailLayout");
 
 /**
@@ -22,7 +23,8 @@ const {
  * one-time "set your password" link reusing the reset-token machinery, and
  * that is a small change now that `/auth/reset-password` exists.
  */
-function accountCreatedEmail({ firstName, email, temporaryPassword, role }) {
+function accountCreatedEmail({ fullName, email, temporaryPassword, role }) {
+  const name = greetingName(fullName);
   const loginUrl = `${env.APP_URL.replace(/\/$/, "")}/login`;
 
   const roleLine =
@@ -31,7 +33,7 @@ function accountCreatedEmail({ firstName, email, temporaryPassword, role }) {
       : null;
 
   const textLines = [
-    `Hi ${firstName},`,
+    `Hi ${name},`,
     "",
     "An account has been created for you on GadgetSimp.",
     roleLine,
@@ -57,7 +59,7 @@ function accountCreatedEmail({ firstName, email, temporaryPassword, role }) {
     text: textLines.join("\n"),
     html: layout({
       preheader: "An account has been created for you.",
-      heading: `Hi ${firstName}, your account is ready`,
+      heading: `Hi ${name}, your account is ready`,
       body: `
         <p style="${p}">
           An account has been created for you on GadgetSimp.

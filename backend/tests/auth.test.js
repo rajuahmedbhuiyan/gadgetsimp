@@ -129,7 +129,7 @@ describe("POST /auth/refresh", () => {
 
     await request(app)
       .post(`${API}/auth/register`)
-      .send({ firstName: "Raju", lastName: "Ahmed", email, password: "Str0ngPass" });
+      .send({ fullName: "Raju Ahmed", email, password: "Str0ngPass" });
 
     const verified = await request(app)
       .post(`${API}/auth/verify-email`)
@@ -241,8 +241,7 @@ describe("access token claims", () => {
   it("carries identity a frontend can render without another round trip", async () => {
     const email = uniqueEmail("claims");
     await User.create({
-      firstName: "Raju",
-      lastName: "Ahmed",
+      fullName: "Raju Ahmed",
       email,
       password: "Passw0rd!",
       phone: "+8801602817341",
@@ -256,8 +255,7 @@ describe("access token claims", () => {
     expect(decode(login.body.data.accessToken)).toMatchObject({
       sub: expect.any(String),
       role: "ROLE_CUSTOMER",
-      firstName: "Raju",
-      lastName: "Ahmed",
+      fullName: "Raju Ahmed",
       email,
       phone: "+8801602817341",
     });

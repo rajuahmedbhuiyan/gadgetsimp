@@ -37,10 +37,9 @@
  *         application/json:
  *           schema:
  *             type: object
- *             required: [firstName, lastName, email, password]
+ *             required: [fullName, email, password]
  *             properties:
- *               firstName: { type: string, maxLength: 60, example: Raju }
- *               lastName: { type: string, maxLength: 60, example: Ahmed }
+ *               fullName: { type: string, maxLength: 120, example: Raju Ahmed }
  *               email: { type: string, format: email, example: raju@example.com }
  *               password:
  *                 type: string
@@ -152,8 +151,7 @@
  *                           description: Post this back with the chosen password. Valid for 30 minutes.
  *                           example: 4bR7tY2wQ9zX1cV3bN5mK8jH0gF6dS4aP2oI7uY5tR3
  *                         email: { type: string, example: rahim@example.com }
- *                         firstName: { type: string, example: Rahim }
- *                         lastName: { type: string, example: Uddin }
+ *                         fullName: { type: string, example: Rahim Uddin }
  *             example:
  *               success: true
  *               statusCode: 200
@@ -162,8 +160,7 @@
  *               data:
  *                 registrationToken: 4bR7tY2wQ9zX1cV3bN5mK8jH0gF6dS4aP2oI7uY5tR3
  *                 email: rahim@example.com
- *                 firstName: Rahim
- *                 lastName: Uddin
+ *                 fullName: Rahim Uddin
  *       400:
  *         description: Token invalid, already used, or expired.
  *         content:

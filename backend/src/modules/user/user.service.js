@@ -65,7 +65,7 @@ async function createUser(input, actor) {
     await sendMail({
       to: user.email,
       ...accountCreatedEmail({
-        firstName: user.firstName,
+        fullName: user.fullName,
         email: user.email,
         temporaryPassword: generatedPassword,
         role: assignedRole,
@@ -109,13 +109,20 @@ async function filterUsers(params) {
   const filter = {};
 
   if (params.search) {
-    // Anchored, escaped prefix match on each name field plus a contains match
-    // on email. A bare user-supplied regex would let a client mount a ReDoS,
-    // and an unanchored `.*term.*` on every field cannot use an index at all.
+    /**
+     * Escaped prefix match on any word of the name, plus a contains match on
+     * email. The term is escaped because a bare user-supplied regex would let
+     * a client mount a ReDoS.
+     *
+     * `(^|\s)` rather than a plain `^`: with one name field, anchoring at
+     * position 0 would only ever match the first word, so searching an admin
+     * list for a surname would find nothing. It is still a prefix match per
+     * word rather than an unanchored `.*term.*`, which would match the middle
+     * of any word and turn every search into a full scan of junk.
+     */
     const term = escapeRegex(params.search);
     filter.$or = [
-      { firstName: { $regex: `^${term}`, $options: "i" } },
-      { lastName: { $regex: `^${term}`, $options: "i" } },
+      { fullName: { $regex: `(^|\\s)${term}`, $options: "i" } },
       { email: { $regex: term, $options: "i" } },
     ];
   }
@@ -337,11 +344,7 @@ function toPublicUser({
   _id,
   ...rest
 }) {
-  return {
-    id: _id,
-    ...rest,
-    fullName: `${rest.firstName} ${rest.lastName}`.trim(),
-  };
+  return { id: _id, ...rest };
 }
 
 function escapeRegex(value) {

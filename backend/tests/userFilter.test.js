@@ -11,8 +11,7 @@ const app = createApp();
 async function seedUsers() {
   await User.create([
     {
-      firstName: "Aisha",
-      lastName: "Rahman",
+      fullName: "Aisha Rahman",
       email: "aisha@filter.dev",
       password: "Passw0rd!",
       role: ROLES.CUSTOMER,
@@ -21,8 +20,7 @@ async function seedUsers() {
       createdAt: new Date("2026-01-10"),
     },
     {
-      firstName: "Bilal",
-      lastName: "Ahmed",
+      fullName: "Bilal Ahmed",
       email: "bilal@filter.dev",
       password: "Passw0rd!",
       role: ROLES.MODERATOR,
@@ -30,8 +28,7 @@ async function seedUsers() {
       createdAt: new Date("2026-03-15"),
     },
     {
-      firstName: "Chowdhury",
-      lastName: "Karim",
+      fullName: "Chowdhury Karim",
       email: "chow@filter.dev",
       password: "Passw0rd!",
       role: ROLES.ADMIN,
@@ -40,8 +37,7 @@ async function seedUsers() {
       createdAt: new Date("2026-06-01"),
     },
     {
-      firstName: "Dina",
-      lastName: "Sultana",
+      fullName: "Dina Sultana",
       email: "dina@filter.dev",
       password: "Passw0rd!",
       role: ROLES.CUSTOMER,
@@ -85,8 +81,7 @@ describe("POST /users - filtering", () => {
 
     const [user] = response.body.data.users;
     expect(user).toMatchObject({
-      firstName: "Aisha",
-      lastName: "Rahman",
+      fullName: "Aisha Rahman",
       email: "aisha@filter.dev",
       role: ROLES.CUSTOMER,
       status: USER_STATUS.ACTIVE,
@@ -242,11 +237,11 @@ describe("POST /users - pagination and sorting", () => {
 
   it("sorts ascending by a chosen field", async () => {
     const response = await filter(
-      { sortBy: "firstName", sortOrder: "asc", limit: 100 },
+      { sortBy: "fullName", sortOrder: "asc", limit: 100 },
       authHeader
     );
 
-    const names = response.body.data.users.map((u) => u.firstName);
+    const names = response.body.data.users.map((u) => u.fullName);
     expect(names).toEqual([...names].sort());
   });
 

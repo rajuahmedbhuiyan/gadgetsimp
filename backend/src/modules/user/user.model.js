@@ -39,19 +39,21 @@ const userSchema = new mongoose.Schema(
     // ObjectId entirely rather than sitting alongside it as a second key.
     _id: { type: Number },
 
-    firstName: {
+    /**
+     * One name field rather than a first/last pair.
+     *
+     * A mononym is ordinary in Bangladesh and much of the world, so a required
+     * surname forces either a lie or a placeholder - and a name that arrives
+     * from a social provider or a checkout form is a single string anyway.
+     * Storing what the user actually typed avoids splitting it on a guess and
+     * reassembling it wrongly.
+     */
+    fullName: {
       type: String,
-      required: [true, "First name is required"],
+      required: [true, "Name is required"],
       trim: true,
       minlength: 1,
-      maxlength: 60,
-    },
-    lastName: {
-      type: String,
-      required: [true, "Last name is required"],
-      trim: true,
-      minlength: 1,
-      maxlength: 60,
+      maxlength: 120,
     },
     email: {
       type: String,
@@ -196,15 +198,11 @@ userSchema.virtual("id").get(function id() {
   return this._id;
 });
 
-userSchema.virtual("fullName").get(function fullName() {
-  return `${this.firstName} ${this.lastName}`.trim();
-});
-
 // The unique index backing `email` is declared by `unique: true` on the field
 // itself. It serves both the uniqueness guarantee and the by-email lookup
 // every login performs.
 userSchema.index({ role: 1, createdAt: -1 });
-userSchema.index({ lastName: 1, firstName: 1 });
+userSchema.index({ fullName: 1 });
 
 /**
  * The lookup every social sign-in performs, and the constraint that stops one

@@ -13,9 +13,9 @@ const { BRAND } = require("../src/shared/constants");
  * decision the palette forces.
  */
 const templates = [
-  ["verification", verificationEmail({ firstName: "Raju", token: "abc123" })],
-  ["welcome", welcomeEmail({ firstName: "Raju" })],
-  ["existing account", existingAccountEmail({ firstName: "Raju" })],
+  ["verification", verificationEmail({ fullName: "Raju", token: "abc123" })],
+  ["welcome", welcomeEmail({ fullName: "Raju" })],
+  ["existing account", existingAccountEmail({ fullName: "Raju" })],
 ];
 
 describe.each(templates)("%s email", (_name, email) => {
@@ -58,7 +58,7 @@ describe.each(templates)("%s email", (_name, email) => {
 });
 
 describe("verification email", () => {
-  const email = verificationEmail({ firstName: "Raju", token: "tok-123" });
+  const email = verificationEmail({ fullName: "Raju", token: "tok-123" });
 
   it("links to the frontend, not the API", () => {
     // Emailing an API endpoint would leave the user staring at raw JSON.
@@ -83,7 +83,7 @@ describe("verification email", () => {
   });
 
   it("url-encodes the token", () => {
-    const tricky = verificationEmail({ firstName: "R", token: "a+b/c=d" });
+    const tricky = verificationEmail({ fullName: "R", token: "a+b/c=d" });
     expect(tricky.html).toContain(encodeURIComponent("a+b/c=d"));
   });
 });

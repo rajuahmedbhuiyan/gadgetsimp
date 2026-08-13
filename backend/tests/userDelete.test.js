@@ -69,8 +69,7 @@ describe("DELETE /users/:id - soft delete", () => {
       .post(`${API}/users/create`)
       .set("Authorization", owner.authHeader)
       .send({
-        firstName: "Someone",
-        lastName: "Else",
+        fullName: "Someone Else",
         email: target.email,
         password: "Str0ngPass",
       });
@@ -179,8 +178,7 @@ describe("DELETE /users/:id/permanent - hard delete", () => {
       .post(`${API}/users/create`)
       .set("Authorization", authHeader)
       .send({
-        firstName: "Brand",
-        lastName: "New",
+        fullName: "Brand New",
         email: target.email,
         password: "Str0ngPass",
       });

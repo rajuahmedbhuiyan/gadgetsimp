@@ -236,7 +236,7 @@ describe.each([
 
     await request(app)
       .post(`${API}/auth/register`)
-      .send({ firstName: "Rafi", lastName: "Hasan", email, password: "Str0ngPass" });
+      .send({ fullName: "Rafi Hasan", email, password: "Str0ngPass" });
     expect(await PendingRegistration.exists({ email })).not.toBeNull();
 
     stub(withEmail(`${type}-600`, email));
@@ -355,7 +355,7 @@ describe("Google-specific verification", () => {
     expect(await User.countDocuments({})).toBe(0);
   });
 
-  it("falls back to splitting `name` when given/family names are absent", async () => {
+  it("takes `name` verbatim when given/family names are absent", async () => {
     stubGoogle({
       sub: "google-noname",
       email: "solo@gmail.com",
@@ -365,8 +365,22 @@ describe("Google-specific verification", () => {
 
     const response = await request(app).post(SOCIAL).send({ type: "GOOGLE", token: TOKEN });
 
-    expect(response.body.data.user.firstName).toBe("Ayesha");
-    expect(response.body.data.user.lastName).toBe("Siddiqua");
+    expect(response.body.data.user.fullName).toBe("Ayesha Siddiqua");
+  });
+
+  // A single-word display name is stored as-is rather than padded with an
+  // invented surname.
+  it("stores a mononym from the provider unchanged", async () => {
+    stubGoogle({
+      sub: "google-mononym",
+      email: "mononym@gmail.com",
+      email_verified: true,
+      name: "Ayesha",
+    });
+
+    const response = await request(app).post(SOCIAL).send({ type: "GOOGLE", token: TOKEN });
+
+    expect(response.body.data.user.fullName).toBe("Ayesha");
   });
 });
 

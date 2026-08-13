@@ -144,8 +144,8 @@ stolen and drops *every* session for that user (\`REFRESH_TOKEN_REUSED\`). So:
 never fire two refreshes concurrently — de-duplicate them (see the client
 below) or a race will sign your user out.
 
-The access token payload carries \`sub\`, \`email\`, \`firstName\`, \`lastName\`,
-\`mobile\` and \`role\`, so you can render a header without an extra call. Do not
+The access token payload carries \`sub\`, \`email\`, \`fullName\`,
+\`phone\` and \`role\`, so you can render a header without an extra call. Do not
 trust it for authorisation decisions that matter — the server re-checks the
 user on every request.
 
@@ -524,7 +524,7 @@ only mailbox access, so it is not treated as a login.
 const { data, code } = await api("/auth/verify-email", { method: "POST", body: { token } });
 
 if (code === "REQUIRED_PASSWORD") {
-  openPasswordModal(data.registrationToken);   // data also has email, firstName, lastName
+  openPasswordModal(data.registrationToken);   // data also has email, fullName
 } else {
   setAccessToken(data.accessToken);            // normal signup: already an account
 }

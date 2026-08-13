@@ -22,8 +22,7 @@ describe("response envelope carries statusCode", () => {
 
   it("on the 202 from signup", async () => {
     const response = await request(app).post(`${API}/auth/register`).send({
-      firstName: "Raju",
-      lastName: "Ahmed",
+      fullName: "Raju Ahmed",
       email: uniqueEmail("envelope"),
       password: "Str0ngPass",
     });
@@ -92,7 +91,7 @@ describe("verification link validity window", () => {
 
     expect(EMAIL_VERIFICATION_TTL_MINUTES).toBe(10);
 
-    const email = verificationEmail({ firstName: "Raju", token: "abc" });
+    const email = verificationEmail({ fullName: "Raju", token: "abc" });
 
     // Rendered as minutes, not a rounded "0 hours".
     expect(email.text).toContain("10 minutes");

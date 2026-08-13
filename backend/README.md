@@ -319,7 +319,7 @@ POST /auth/reset-password    { token, newPassword }
 ### Creating users directly (owner only)
 
 ```
-POST /users   { firstName, lastName, email, password?, role?, sendEmail? }
+POST /users   { fullName, email, password?, role?, sendEmail? }
 ```
 
 Requires **`ROLE_OWNER`** — not admin. Creating accounts outright, skipping
@@ -426,8 +426,8 @@ owners. The last owner cannot be demoted or deactivated.
 Access token (15 min, `Authorization: Bearer`) + refresh token (30 days,
 rotated on every use).
 
-The access token's payload carries `sub`, `role`, `tokenVersion`, `firstName`,
-`lastName`, `email` and `phone` — a convenience copy so a frontend can render a
+The access token's payload carries `sub`, `role`, `tokenVersion`, `fullName`,
+`email` and `phone` — a convenience copy so a frontend can render a
 header without calling `/auth/me`. It is a **snapshot, not an authority**: a JWT
 is signed but not encrypted (anyone holding it can read those values), and the
 claims can go stale within the 15-minute window. Nothing server-side trusts

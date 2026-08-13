@@ -87,16 +87,14 @@ describe("unique constraints are actually enforced", () => {
     const User = mongoose.model("User");
 
     await User.create({
-      firstName: "First",
-      lastName: "User",
+      fullName: "First User",
       email: "dupe@test.dev",
       password: "Passw0rd!",
     });
 
     await expect(
       User.create({
-        firstName: "Second",
-        lastName: "User",
+        fullName: "Second User",
         email: "dupe@test.dev",
         password: "Passw0rd!",
       })

@@ -54,8 +54,8 @@ const MAX_RESENDS = 5;
  * exactly the leak the login route is careful to avoid, and it would be
  * pointless to close one and leave the other open.
  */
-async function register({ firstName, lastName, email, password, phone }) {
-  const existingUser = await User.findOne({ email }).select("firstName").lean();
+async function register({ fullName, email, password, phone }) {
+  const existingUser = await User.findOne({ email }).select("fullName").lean();
 
   if (existingUser) {
     // Tell the real owner of the address that someone tried, rather than
@@ -67,7 +67,7 @@ async function register({ firstName, lastName, email, password, phone }) {
     // and lets a signup attempt put arbitrary text in someone else's inbox.
     await notifyExistingAccount({
       email,
-      firstName: existingUser.firstName,
+      fullName: existingUser.fullName,
     }).catch((error) =>
       logger.error({ err: error }, "Failed to send existing-account notice")
     );
@@ -84,8 +84,7 @@ async function register({ firstName, lastName, email, password, phone }) {
     { email },
     {
       email,
-      firstName,
-      lastName,
+      fullName,
       phone,
       passwordHash,
       tokenHash,
@@ -101,7 +100,7 @@ async function register({ firstName, lastName, email, password, phone }) {
 
   // Awaited, not fire-and-forget: if the mail cannot be handed off there is no
   // way for the user to ever complete signup, so that must fail the request.
-  await sendMail({ to: email, ...verificationEmail({ firstName, token }) });
+  await sendMail({ to: email, ...verificationEmail({ fullName, token }) });
 }
 
 /**
@@ -170,14 +169,12 @@ async function verifyEmail(token, context = {}) {
       outcome: "REQUIRED_PASSWORD",
       registrationToken,
       email: pending.email,
-      firstName: pending.firstName,
-      lastName: pending.lastName,
+      fullName: pending.fullName,
     };
   }
 
   const user = await User.create({
-    firstName: pending.firstName,
-    lastName: pending.lastName,
+    fullName: pending.fullName,
     email: pending.email,
     phone: pending.phone,
     // Already a bcrypt digest; the model's save hook detects that and does
@@ -259,8 +256,7 @@ async function completeRegistration({ token, password }, context = {}) {
   }
 
   const user = await User.create({
-    firstName: pending.firstName,
-    lastName: pending.lastName,
+    fullName: pending.fullName,
     email: pending.email,
     phone: pending.phone,
     password,
@@ -288,7 +284,7 @@ async function afterAccountCreated(user) {
     logger.error({ err: error, userId: user._id }, "Failed to claim guest orders")
   );
 
-  await sendMail({ to: user.email, ...welcomeEmail({ firstName: user.firstName }) }).catch(
+  await sendMail({ to: user.email, ...welcomeEmail({ fullName: user.fullName }) }).catch(
     (error) => logger.error({ err: error }, "Failed to send welcome email")
   );
 }
@@ -314,7 +310,9 @@ async function inviteAccountFromCheckout({ email, name, phone, orderNumber }) {
   // strangers.
   if (existing) return { invited: false, reason: "ACCOUNT_EXISTS" };
 
-  const { firstName, lastName } = splitName(name);
+  // Checkout collects one name field and so does the account, so it carries
+  // straight over - no splitting on a guess and reassembling it wrongly.
+  const fullName = String(name ?? "").trim() || "Customer";
   const { token, tokenHash } = createSecureToken();
 
   await PendingRegistration.findOneAndUpdate(
@@ -322,8 +320,7 @@ async function inviteAccountFromCheckout({ email, name, phone, orderNumber }) {
     {
       $set: {
         email,
-        firstName,
-        lastName,
+        fullName,
         phone,
         tokenHash,
         expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MINUTES * 60 * 1000),
@@ -342,28 +339,10 @@ async function inviteAccountFromCheckout({ email, name, phone, orderNumber }) {
 
   await sendMail({
     to: email,
-    ...checkoutAccountEmail({ firstName, orderNumber, token }),
+    ...checkoutAccountEmail({ fullName, orderNumber, token }),
   });
 
   return { invited: true };
-}
-
-/**
- * Splits a single checkout name field into the two the user model requires.
- *
- * Checkout asks for one name because that is what a delivery label needs, and
- * a mononym is perfectly normal in Bangladesh - so a single word gets a "-"
- * placeholder rather than an invented surname or the first name repeated. It
- * reads as obviously unset, which is what a placeholder should do, and the
- * customer can correct it from their profile.
- */
-function splitName(name) {
-  const parts = String(name ?? "").trim().split(/\s+/).filter(Boolean);
-
-  if (parts.length === 0) return { firstName: "Customer", lastName: "-" };
-  if (parts.length === 1) return { firstName: parts[0], lastName: "-" };
-
-  return { firstName: parts.slice(0, -1).join(" "), lastName: parts.at(-1) };
 }
 
 /**
@@ -403,7 +382,7 @@ async function resendVerification(email) {
 
   await sendMail({
     to: pending.email,
-    ...verificationEmail({ firstName: pending.firstName, token }),
+    ...verificationEmail({ fullName: pending.fullName, token }),
   });
 }
 
@@ -494,8 +473,7 @@ async function socialLogin(type, token, context = {}) {
 
   // 3. Brand new account. No password, and no verification email.
   const user = await User.create({
-    firstName: profile.firstName,
-    lastName: profile.lastName,
+    fullName: profile.fullName,
     email: profile.email,
     socialAccounts: [{ provider: profile.provider, providerId: profile.providerId }],
     authProviders: [profile.provider],
@@ -666,7 +644,7 @@ async function forgotPassword(email) {
 
   await sendMail({
     to: user.email,
-    ...passwordResetEmail({ firstName: user.firstName, token }),
+    ...passwordResetEmail({ fullName: user.fullName, token }),
   });
 }
 
@@ -723,7 +701,7 @@ async function resetPassword({ token, newPassword }) {
   // succeeded, and failing the request now would be misleading.
   await sendMail({
     to: user.email,
-    ...passwordChangedEmail({ firstName: user.firstName }),
+    ...passwordChangedEmail({ fullName: user.fullName }),
   }).catch((error) => logger.error({ err: error }, "Failed to send password-changed notice"));
 }
 
@@ -761,7 +739,7 @@ async function changePassword(userId, { currentPassword, newPassword }) {
 
   await sendMail({
     to: user.email,
-    ...passwordChangedEmail({ firstName: user.firstName }),
+    ...passwordChangedEmail({ fullName: user.fullName }),
   }).catch((error) => logger.error({ err: error }, "Failed to send password-changed notice"));
 }
 
@@ -795,8 +773,8 @@ function createSecureToken() {
   return { token, tokenHash: hashToken(token) };
 }
 
-async function notifyExistingAccount({ email, firstName }) {
-  await sendMail({ to: email, ...existingAccountEmail({ firstName }) });
+async function notifyExistingAccount({ email, fullName }) {
+  await sendMail({ to: email, ...existingAccountEmail({ fullName }) });
 }
 
 function safeJti(refreshToken) {

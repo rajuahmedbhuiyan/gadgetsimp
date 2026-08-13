@@ -189,8 +189,7 @@ describe("POST /auth/reset-password", () => {
   it("gives a social-only account a password, adding EMAIL as a method", async () => {
     const email = uniqueEmail("socialonly");
     await User.create({
-      firstName: "Social",
-      lastName: "Only",
+      fullName: "Social Only",
       email,
       authProviders: [AUTH_PROVIDERS.GOOGLE],
       socialAccounts: [{ provider: AUTH_PROVIDERS.GOOGLE, providerId: "g-reset" }],

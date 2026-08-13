@@ -133,8 +133,7 @@ describe("configured tiers", () => {
           // still consume limiter budget and make this test pass for the
           // wrong reason.
           .send({
-            firstName: "Bulk",
-            lastName: "Signup",
+            fullName: "Bulk Signup",
             email: `bulk-${index}@example.com`,
             password: "Str0ngPass",
           })
