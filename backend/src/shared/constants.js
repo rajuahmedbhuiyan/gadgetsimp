@@ -273,6 +273,20 @@ const CART_ISSUE = Object.freeze({
 
 const CART_ISSUE_VALUES = Object.freeze(Object.values(CART_ISSUE));
 
+/**
+ * Wishlist limits.
+ *
+ * Roomier than the cart, because the two are different things: a cart is what
+ * you are buying now and a hundred lines is already unreasonable, while a
+ * wishlist is a list you keep - saving two hundred products over a year is
+ * ordinary use, not abuse. The cap exists so it stays bounded storage attached
+ * to an account, not because anyone should hit it.
+ */
+const WISHLIST = Object.freeze({
+  MAX_ITEMS: 200,
+  MAX_BATCH_SIZE: 50,
+});
+
 /* -------------------------------- Orders --------------------------------- */
 
 /**
@@ -452,6 +466,7 @@ module.exports = {
   CART,
   CART_ISSUE,
   CART_ISSUE_VALUES,
+  WISHLIST,
   ORDER,
   ORDER_STATUS,
   ORDER_STATUS_VALUES,

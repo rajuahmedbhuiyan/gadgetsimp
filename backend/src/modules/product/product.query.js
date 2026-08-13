@@ -53,6 +53,32 @@ function publicMatch({ categoryIds, search, featured, inStock, brandIds }) {
 }
 
 /**
+ * The same gate as `publicMatch()`, written as an aggregation **expression**
+ * instead of a query.
+ *
+ * Two forms of one rule, deliberately kept adjacent. A pipeline that has
+ * already `$lookup`-ed a product cannot re-apply `publicMatch` as a `$match`
+ * without dropping the row entirely - but the wishlist needs to *keep* a row
+ * whose product was withdrawn and merely flag it, exactly as the cart does. So
+ * it needs the rule as a boolean it can compute.
+ *
+ * They must change together; if you edit one, edit the other. A missing
+ * product evaluates to `false` here rather than throwing, which is what makes
+ * a hard-deleted product read as unavailable instead of breaking the page.
+ */
+function publicVisibilityExpr() {
+  return {
+    $and: [
+      { $in: ["$status", [PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.OUT_OF_STOCK]] },
+      { $eq: ["$visibility", PRODUCT_VISIBILITY.PUBLIC] },
+      { $eq: [{ $ifNull: ["$deletedAt", null] }, null] },
+      { $ne: [{ $ifNull: ["$publishedAt", null] }, null] },
+      { $lte: [{ $ifNull: ["$publishedAt", new Date(8640000000000000)] }, "$$NOW"] },
+    ],
+  };
+}
+
+/**
  * The same gate for a variant: sellable states only, not soft-deleted.
  *
  * Extracted so the `$lookup` below and the cart - which has to decide whether
@@ -372,4 +398,24 @@ async function catalogFacets({ categoryIds, search, filters, attributes }) {
   return result ?? {};
 }
 
-module.exports = { listCatalog, catalogFacets, publicMatch, variantPublicMatch };
+/**
+ * The variant price roll-up, as a standalone stage.
+ *
+ * A variable product has no price of its own worth showing - its range comes
+ * from its variants - so anything rendering a card needs this. Exported so the
+ * wishlist builds the same `pricing` block as the storefront rather than
+ * inventing a second answer to "what does this cost".
+ */
+function priceStatsLookup(as = "_priceStats") {
+  return matchingVariantsLookup([], as, { groupByPrice: true });
+}
+
+module.exports = {
+  listCatalog,
+  catalogFacets,
+  publicMatch,
+  variantPublicMatch,
+  publicVisibilityExpr,
+  priceStatsLookup,
+  CARD_PROJECTION,
+};
