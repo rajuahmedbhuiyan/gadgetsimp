@@ -132,8 +132,23 @@ function hashToken(token) {
  *   - **strict** - tightest, but the cookie is withheld on any cross-site
  *     request at all.
  *
- * `path` scopes the cookie to the auth routes: it is the only place it is
- * ever needed, so it is not attached to every catalog request.
+ * `path` is `/` so the storefront's own server receives the cookie too.
+ *
+ * Scoping it to `${API_PREFIX}/auth` is tighter and was the earlier setting,
+ * but it also means the browser withholds the cookie from every request that
+ * is not aimed at these routes - including the document request that renders
+ * the storefront. That makes server-side rendering of a signed-in page
+ * impossible: the frontend's middleware has no credential to refresh with, so
+ * the session can only ever be established after JavaScript boots.
+ *
+ * Widening the path does not widen who can read it. It stays httpOnly, so no
+ * script sees it on either origin, and `sameSite` still governs cross-site
+ * sends. What it costs is that the cookie now rides along on catalog and order
+ * requests where it is not needed.
+ *
+ * In production the frontend and API must share a parent domain for this to
+ * work - set COOKIE_DOMAIN=.yourdomain.tld. On localhost they already share a
+ * host, because cookies ignore ports.
  */
 function refreshCookieOptions() {
   return {
@@ -141,7 +156,7 @@ function refreshCookieOptions() {
     secure: env.isProduction || env.COOKIE_SAMESITE === "none",
     sameSite: env.COOKIE_SAMESITE,
     domain: env.COOKIE_DOMAIN,
-    path: `${env.API_PREFIX}/auth`,
+    path: "/",
     maxAge: parseDuration(env.JWT_REFRESH_EXPIRES_IN),
   };
 }

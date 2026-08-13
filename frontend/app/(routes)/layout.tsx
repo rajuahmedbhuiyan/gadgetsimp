@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
+import { UserMenu } from "@/components/auth/user-menu";
 import { Toaster } from "@/components/ui/sonner";
+import { decodeUserHeader, USER_HEADER } from "@/lib/auth/user-header";
 import { Providers } from "../providers";
 import "../globals.css";
 
@@ -19,7 +23,11 @@ export const metadata: Metadata = {
   description: "GadgetSimp online store",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Middleware already refreshed the token and read /users/me, so the server
+  // render knows the user without a call of its own.
+  const user = decodeUserHeader((await headers()).get(USER_HEADER));
+
   return (
     // next-themes writes the theme class on <html> before paint, which the
     // server render cannot know about.
@@ -29,7 +37,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+        <Providers initialUser={user}>
+          <header className="flex items-center justify-between gap-4 border-b px-4 py-3">
+            <Link href="/" className="font-semibold">
+              GadgetSimp
+            </Link>
+            <UserMenu />
+          </header>
+          {children}
+        </Providers>
         <Toaster />
       </body>
     </html>

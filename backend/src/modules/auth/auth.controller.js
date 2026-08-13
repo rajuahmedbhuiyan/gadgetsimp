@@ -7,21 +7,45 @@ const { configuredProviders } = require("./providers");
 const env = require("../../config/env");
 
 /**
+ * Tells a browser apart from a server-side or native client.
+ *
+ * `Origin` and `Sec-Fetch-*` are forbidden header names: the browser sets them
+ * on every cross-origin request and page script cannot remove or forge them.
+ * A server-to-server call (the storefront's own backend-for-frontend), a
+ * native app, a CLI or Postman sends neither.
+ *
+ * The direction that matters is the one that cannot be faked - script running
+ * on a page cannot pretend to be a native client, so it cannot talk its way
+ * into being handed a refresh token it could exfiltrate.
+ */
+function isBrowserRequest(req) {
+  return Boolean(req.get("origin") || req.get("sec-fetch-mode"));
+}
+
+/**
  * Builds the auth payload, and sets the refresh cookie as a side effect.
  *
  * The refresh token always goes out as an httpOnly cookie - that is the path
  * a browser should use, because JavaScript cannot read it and therefore XSS
  * cannot steal it. It is *additionally* placed in the body when
  * REFRESH_TOKEN_IN_BODY is on, for clients that cannot hold cookies at all
- * (native apps, CLIs, Postman) and for visibility while developing.
+ * (native apps, CLIs, a server-side BFF).
+ *
+ * Never for a browser, whatever the flag says. httpOnly stops a cookie being
+ * *read*, not being *used*: an XSS payload can already call this endpoint with
+ * `credentials: "include"`, so answering with the token in the body would hand
+ * that payload a 30-day credential it can carry off the machine. The flag
+ * exists for clients with nowhere to put a cookie, and a browser is not one.
  */
 function issue(res, { user, accessToken, refreshToken }) {
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
 
+  const inBody = env.REFRESH_TOKEN_IN_BODY && !isBrowserRequest(res.req);
+
   return {
     user,
     accessToken,
-    ...(env.REFRESH_TOKEN_IN_BODY ? { refreshToken } : {}),
+    ...(inBody ? { refreshToken } : {}),
   };
 }
 
@@ -175,15 +199,22 @@ async function login(req, res) {
 }
 
 /**
- * Cookie first, body second.
+ * Cookie first, body second - and for a browser, cookie only.
  *
  * A browser sends the cookie automatically and should keep using it. A client
  * that cannot hold cookies has nowhere to put one, so it may present the token
  * it was given in the body instead - otherwise returning it there would be
- * pointless. The cookie takes precedence when both arrive.
+ * pointless.
+ *
+ * The body branch is closed to browsers because it is a session-fixation path:
+ * an XSS payload that posts *its own* refresh token here would leave the victim
+ * shopping inside the attacker's account, entering an address and a card into
+ * it. A page has a cookie; it has no business presenting anything else.
  */
 async function refresh(req, res) {
-  const presented = req.cookies?.[REFRESH_COOKIE_NAME] ?? req.body?.refreshToken;
+  const presented = isBrowserRequest(req)
+    ? req.cookies?.[REFRESH_COOKIE_NAME]
+    : (req.cookies?.[REFRESH_COOKIE_NAME] ?? req.body?.refreshToken);
 
   const { user, accessToken, refreshToken } = await authService.refresh(
     presented,

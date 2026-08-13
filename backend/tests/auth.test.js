@@ -41,11 +41,41 @@ describe("POST /auth/login", () => {
     // XSS on the storefront cannot steal it. A browser client should use the
     // cookie and ignore the copy in the body.
     expect(cookie).toContain("HttpOnly");
-    expect(cookie).toContain("Path=/api/v1/auth");
+
+    // Path `/` so the storefront's own server receives the cookie on a
+    // document request and can refresh during server-side rendering. Scoping
+    // it to the auth routes made that impossible - the browser withheld it
+    // from every request that rendered a page.
+    expect(cookie).toContain("Path=/");
+    expect(cookie).not.toContain("Path=/api/v1/auth");
 
     // The body copy is the same token, for clients that cannot hold cookies.
+    // Supertest sends no Origin header, so it is treated as one of them.
     const fromCookie = decodeURIComponent(cookie.split(";")[0].split("=")[1]);
     expect(response.body.data.refreshToken).toBe(fromCookie);
+  });
+
+  it("withholds the body refresh token from a browser", async () => {
+    const email = uniqueEmail("browser");
+    await createUserAndLogin(app, { email });
+
+    // `Origin` is a forbidden header name: a browser always sends it and page
+    // script cannot remove it. Answering with the token in the body would hand
+    // an XSS payload a 30-day credential it could carry off the machine -
+    // httpOnly stops a cookie being read, not being used.
+    const response = await request(app)
+      .post(`${API}/auth/login`)
+      .set("Origin", "http://localhost:3000")
+      .send({ email, password: "Passw0rd!" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).not.toHaveProperty("refreshToken");
+
+    // The cookie is still set, which is all a browser needs.
+    const cookie = response.headers["set-cookie"].find((value) =>
+      value.startsWith(REFRESH_COOKIE_NAME)
+    );
+    expect(cookie).toContain("HttpOnly");
   });
 
   it("gives the same response for an unknown email and a wrong password", async () => {
