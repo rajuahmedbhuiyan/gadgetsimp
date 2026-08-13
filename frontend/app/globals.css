@@ -4,6 +4,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------------------
+ * Theme contract
+ *
+ * Every value the UI paints with is a token. Components never hardcode a hex,
+ * a px height for the sticky chrome, or an easing curve - they read from here,
+ * which is what makes a theme swap a one-file change.
+ *
+ * Layers:
+ *   1. semantic surface/text tokens (shadcn's set, brand-tinted)
+ *   2. brand tokens        - the logo's amber and ink
+ *   3. commerce tokens     - price, sale, stock, rating
+ *   4. layout tokens       - heights of the fixed chrome, so `main` can offset
+ *   5. motion tokens       - shared durations and easings
+ * ------------------------------------------------------------------------- */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -39,6 +54,56 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* Brand ------------------------------------------------------------------ */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-muted: var(--brand-muted);
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
+
+  /* Always-dark bands ------------------------------------------------------
+   * The top bar and the footer stay dark in both themes, so they cannot use
+   * `ink` - that one inverts with the theme. These do not: only the exact
+   * shade shifts in dark mode, enough to separate the band from the page
+   * behind it. */
+  --color-surface-dark: var(--surface-dark);
+  /* The footer sits on true black in both themes - darker than the top bar's
+     `surface-dark`, which is why it needs a token of its own rather than
+     sharing one. */
+  --color-surface-footer: var(--surface-footer);
+  --color-surface-dark-foreground: var(--surface-dark-foreground);
+  --color-surface-dark-muted: var(--surface-dark-muted);
+  --color-surface-dark-border: var(--surface-dark-border);
+
+  /* Hero backdrop ----------------------------------------------------------
+   * Three decorative hues the slider's mesh blobs are painted from. Not
+   * semantic - nothing outside the hero should reach for these - but they are
+   * tokens so the two themes can dial the saturation independently. */
+  --color-hero-1: var(--hero-1);
+  --color-hero-2: var(--hero-2);
+  --color-hero-3: var(--hero-3);
+
+  /* Commerce --------------------------------------------------------------- */
+  --color-price: var(--price);
+  --color-sale: var(--sale);
+  --color-sale-foreground: var(--sale-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-rating: var(--rating);
+
+  /* Elevation -------------------------------------------------------------- */
+  --shadow-card: var(--elevation-card);
+  --shadow-card-hover: var(--elevation-card-hover);
+  --shadow-chrome: var(--elevation-chrome);
+
+  /* Layout: the fixed chrome measures itself here so content can offset by it */
+  --spacing-topbar: var(--h-topbar);
+  --spacing-header: var(--h-header);
+  --spacing-tabbar: var(--h-tabbar);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -46,6 +111,25 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Breakpoints ------------------------------------------------------------
+   * Below 380px a two-column product grid leaves each card too narrow to read
+   * a name and a price in, so the grid drops to one. */
+  --breakpoint-xs: 380px;
+
+  /* Motion ----------------------------------------------------------------- */
+  --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-brand-in: cubic-bezier(0.4, 0, 1, 1);
+  --animate-marquee: marquee 32s linear infinite;
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
 }
 
 :root {
@@ -55,23 +139,62 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
+
+  /* The logo's ink is the primary action colour; amber is the accent that
+   * points at it. Amber-on-white fails contrast for button labels, so it stays
+   * a highlight rather than becoming `primary`. */
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.516 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
+  --ring: oklch(0.79 0.164 79);
+
+  --brand: oklch(0.798 0.164 79);
+  --brand-foreground: oklch(0.19 0.014 75);
+  --brand-muted: oklch(0.965 0.043 92);
+  --ink: oklch(0.17 0 0);
+  --ink-foreground: oklch(0.985 0 0);
+
+  --surface-dark: oklch(0.17 0 0);
+  --surface-footer: oklch(0 0 0);
+  --surface-dark-foreground: oklch(0.985 0 0);
+  --surface-dark-muted: oklch(0.72 0 0);
+  --surface-dark-border: oklch(1 0 0 / 12%);
+
+  --hero-1: oklch(0.8 0.164 79);
+  --hero-2: oklch(0.72 0.135 225);
+  --hero-3: oklch(0.7 0.16 320);
+
+  --price: oklch(0.205 0 0);
+  --sale: oklch(0.57 0.21 25);
+  --sale-foreground: oklch(0.985 0 0);
+  --success: oklch(0.6 0.13 155);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.75 0.15 70);
+  --warning-foreground: oklch(0.19 0.014 75);
+  --rating: oklch(0.798 0.164 79);
+
+  --chart-1: oklch(0.798 0.164 79);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+
+  --elevation-card: 0 1px 2px oklch(0.145 0 0 / 6%), 0 1px 3px oklch(0.145 0 0 / 4%);
+  --elevation-card-hover: 0 12px 28px oklch(0.145 0 0 / 10%), 0 4px 10px oklch(0.145 0 0 / 6%);
+  --elevation-chrome: 0 1px 0 oklch(0.145 0 0 / 6%);
+
+  --h-topbar: 2.5rem;
+  --h-header: 4rem;
+  --h-tabbar: 4rem;
+
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -90,27 +213,65 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+
+  /* On a dark ground amber clears contrast against ink text, so the accent and
+   * the primary action become the same colour - which is how the logo reads. */
+  --primary: oklch(0.812 0.166 80);
+  --primary-foreground: oklch(0.19 0.014 75);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
+  --muted-foreground: oklch(0.715 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
+  --ring: oklch(0.812 0.166 80);
+
+  --brand: oklch(0.812 0.166 80);
+  --brand-foreground: oklch(0.19 0.014 75);
+  --brand-muted: oklch(0.32 0.055 82);
+  --ink: oklch(0.985 0 0);
+  --ink-foreground: oklch(0.17 0 0);
+
+  /* Lifted off the page background rather than inverted, so the band still
+     reads as a separate surface on a dark page. */
+  --surface-dark: oklch(0.212 0 0);
+  --surface-footer: oklch(0 0 0);
+  --surface-dark-foreground: oklch(0.985 0 0);
+  --surface-dark-muted: oklch(0.72 0 0);
+  --surface-dark-border: oklch(1 0 0 / 10%);
+
+  /* Pushed brighter and a touch less saturated: the same blobs over a dark
+     ground read muddy at the light-theme values. */
+  --hero-1: oklch(0.82 0.155 80);
+  --hero-2: oklch(0.7 0.13 228);
+  --hero-3: oklch(0.68 0.15 322);
+
+  --price: oklch(0.985 0 0);
+  --sale: oklch(0.68 0.19 25);
+  --sale-foreground: oklch(0.145 0 0);
+  --success: oklch(0.72 0.15 155);
+  --success-foreground: oklch(0.145 0 0);
+  --warning: oklch(0.82 0.15 75);
+  --warning-foreground: oklch(0.19 0.014 75);
+  --rating: oklch(0.812 0.166 80);
+
+  --chart-1: oklch(0.812 0.166 80);
   --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --chart-3: oklch(0.639 0 0);
+  --chart-4: oklch(0.771 0 0);
+  --chart-5: oklch(0.869 0 0);
+
+  --elevation-card: 0 1px 2px oklch(0 0 0 / 40%), 0 1px 3px oklch(0 0 0 / 30%);
+  --elevation-card-hover: 0 12px 28px oklch(0 0 0 / 55%), 0 4px 10px oklch(0 0 0 / 35%);
+  --elevation-chrome: 0 1px 0 oklch(1 0 0 / 8%);
+
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.812 0.166 80);
+  --sidebar-primary-foreground: oklch(0.19 0.014 75);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
@@ -126,5 +287,50 @@
   }
   html {
     @apply font-sans;
+    /* Anchor links and `scrollIntoView` land below the sticky header. */
+    scroll-padding-top: calc(var(--h-header) + 1rem);
   }
+
+  /* Tailwind v4's reset leaves buttons on the UA default of `cursor: default`.
+   * Anything that responds to a click says so, in one rule, rather than every
+   * component remembering to add `cursor-pointer`. Disabled controls keep the
+   * default cursor - they are not clickable. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="radio"],
+  [role="tab"],
+  [role="option"],
+  a[href],
+  label[for],
+  summary,
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /* Honour the OS setting. Every animation in the app is decorative - none of
+   * it carries meaning that is lost when it is switched off. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Horizontal rails snap to card edges on touch, scroll freely with a wheel. */
+@utility snap-rail {
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
 }
