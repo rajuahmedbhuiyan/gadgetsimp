@@ -208,17 +208,17 @@ TTL index (24 h) instead of squatting on an email address forever.
 - Only the **SHA-256 of the token** is stored; the raw token exists solely in
   the email. The token is single-use — a replayed link returns
   `VERIFICATION_TOKEN_INVALID`.
-- `register` answers identically whether or not the address is taken, so it
-  cannot be used to test which emails have accounts. If it *was* taken, the
-  real account holder gets a notice instead — addressed with their own name,
-  not the one the stranger submitted.
+- `register` returns `409 EMAIL_ALREADY_REGISTERED` when the address is already
+  taken. For a social-only account, the message names Google or Facebook so the
+  frontend can direct the user to the correct sign-in button.
 - Without `SMTP_HOST`, emails are logged rather than sent, so the flow works on
   a fresh clone with no mail account.
 
 ### Sign-in methods
 
 `EMAIL` (password), `FACEBOOK`, `GOOGLE`. A user's `authProviders` array lists
-every method their account accepts; one person can link all three.
+the methods their account accepts. Email/password accounts are kept separate
+from social sign-in; a social-only account may link both social providers.
 
 ```
 POST /auth/social-login   { "type": "FACEBOOK" | "GOOGLE", "token": "..." }
@@ -250,15 +250,14 @@ plus one line in the registry.
   unverified JWT is just attacker-supplied JSON.
 - No email-verification step: the provider already verified the address. A
   Google account with `email_verified: false` is rejected outright.
-- If an account already exists for the same address, the provider is **linked**
-  to it rather than duplicated, and every linked method keeps working. Safe only
-  because the providers verify email ownership; otherwise it would be an
-  account-takeover primitive.
+- If the same address already belongs to an email/password account, social
+  sign-in returns `409 EMAIL_LOGIN_REQUIRED` and does not link the provider.
+  A social-only account may still link Google and Facebook to avoid duplicates.
 - No email from the provider (Facebook user registered by phone, or declined the
   permission) → `SOCIAL_EMAIL_MISSING`; fall back to email signup.
 - A social-only account has **no password**: `changePassword` returns
-  `PASSWORD_NOT_SET`, and password login fails with the ordinary generic
-  `INVALID_CREDENTIALS` rather than admitting the account exists.
+  `PASSWORD_NOT_SET`, while password login returns `SOCIAL_LOGIN_REQUIRED` and
+  names the Google or Facebook method the user should continue with.
 - An unconfigured provider returns **503 `SOCIAL_PROVIDER_NOT_CONFIGURED`**, and
   is omitted from `GET /auth/providers`.
 
@@ -299,22 +298,21 @@ cannot invert the amber into mud.
 ### Password recovery
 
 ```
-POST /auth/forgot-password   { email }              -> always 200
+POST /auth/forgot-password   { email }
 POST /auth/reset-password    { token, newPassword }
 ```
 
 - The link is valid for **10 minutes** and is **single use**; only its SHA-256
   hash is stored, so a database dump cannot be used to seize accounts. Issuing
   a new link invalidates the previous one.
-- `forgot-password` answers 200 whether or not the address exists — a different
-  response would be a free membership oracle, undoing the care taken over login
-  and signup.
+- `forgot-password` returns `404 ACCOUNT_NOT_FOUND` for an unknown email and
+  `409 SOCIAL_LOGIN_REQUIRED` for a social-only account, naming the provider.
 - A successful reset **revokes every session**. A reset is the standard response
   to a suspected compromise, so leaving other devices signed in defeats it.
 - A **password-changed email** goes out on every change, not just user-initiated
   ones — that message is what lets a victim notice a takeover.
-- A social-only account can reset too: they own the address, and it gives them a
-  password to use alongside Google/Facebook, adding `EMAIL` to their providers.
+- A social-only account cannot request a password reset because it has no email
+  password; the user is directed back to Google or Facebook.
 
 ### Creating users directly (owner only)
 

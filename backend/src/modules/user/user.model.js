@@ -84,8 +84,8 @@ const userSchema = new mongoose.Schema(
     },
 
     /**
-     * Every way this account can sign in. An account that started with a
-     * password and later linked Facebook carries both, and can use either.
+     * Every way this account can sign in. Email/password accounts contain
+     * EMAIL only; a social-only account may contain both FACEBOOK and GOOGLE.
      */
     authProviders: {
       type: [{ type: String, enum: AUTH_PROVIDER_VALUES }],

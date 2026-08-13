@@ -5,7 +5,7 @@ const createApp = require("../src/app");
 const User = require("../src/modules/user/user.model");
 const PendingRegistration = require("../src/modules/auth/pendingRegistration.model");
 const { API, uniqueEmail, verificationTokenFor, lastMessageTo } = require("./helpers");
-const { ROLES } = require("../src/shared/constants");
+const { AUTH_PROVIDERS, ROLES } = require("../src/shared/constants");
 
 const app = createApp();
 
@@ -71,7 +71,7 @@ describe("POST /auth/register - step 1", () => {
     expect(pending.tokenHash).toHaveLength(64); // sha256 hex
   });
 
-  it("does not reveal that an email is already registered", async () => {
+  it("returns an error when the email is already registered", async () => {
     const body = signup();
 
     // First signup, verified through to a real account.
@@ -80,31 +80,35 @@ describe("POST /auth/register - step 1", () => {
     await request(app).post(`${API}/auth/verify-email`).send({ token });
 
     const second = await request(app).post(`${API}/auth/register`).send(signup({ email: body.email }));
-    const fresh = await request(app).post(`${API}/auth/register`).send(signup());
-
-    // Identical status and message - no enumeration oracle.
-    expect(second.status).toBe(fresh.status);
-    expect(second.body.message).toBe(fresh.body.message);
+    expect(second.status).toBe(409);
+    expect(second.body.code).toBe("EMAIL_ALREADY_REGISTERED");
+    expect(second.body.message).toMatch(/already exists/i);
+    expect(second.body.errors).toContainEqual({
+      field: "email",
+      message: "This email is already registered",
+    });
   });
 
-  it("warns the real account holder, using their own name", async () => {
-    const body = signup({ fullName: "Genuine Owner" });
+  it("tells a social account which provider to use", async () => {
+    const email = uniqueEmail("google-existing");
 
-    await request(app).post(`${API}/auth/register`).send(body);
-    await request(app)
-      .post(`${API}/auth/verify-email`)
-      .send({ token: verificationTokenFor(body.email) });
+    await User.create({
+      fullName: "Google User",
+      email,
+      authProviders: [AUTH_PROVIDERS.GOOGLE],
+      socialAccounts: [
+        { provider: AUTH_PROVIDERS.GOOGLE, providerId: "google-register-existing" },
+      ],
+      emailVerifiedAt: new Date(),
+    });
 
-    // Someone else attempts to sign up with the same address.
-    await request(app)
+    const response = await request(app)
       .post(`${API}/auth/register`)
-      .send(signup({ email: body.email, fullName: "Impostor Person" }));
+      .send(signup({ email }));
 
-    const notice = lastMessageTo(body.email);
-    expect(notice.subject).toMatch(/tried to sign up/i);
-    // Addressed to the account holder, not the name the stranger submitted.
-    expect(notice.text).toContain("Genuine");
-    expect(notice.text).not.toContain("Impostor");
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("EMAIL_ALREADY_REGISTERED");
+    expect(response.body.message).toMatch(/continue with Google/i);
   });
 
   it("replaces the pending record when signing up twice", async () => {

@@ -19,7 +19,6 @@ const {
   verificationEmail,
   checkoutAccountEmail,
   welcomeEmail,
-  existingAccountEmail,
   passwordResetEmail,
   passwordChangedEmail,
 } = require("./auth.emails");
@@ -48,30 +47,18 @@ const MAX_RESENDS = 5;
 /**
  * Step 1 of signup: record the details, email a token. No account yet.
  *
- * Returns nothing the caller can act on, and the controller answers with the
- * same message whether or not the address was already taken. Replying "that
- * email is registered" would turn signup into an account-enumeration oracle -
- * exactly the leak the login route is careful to avoid, and it would be
- * pointless to close one and leave the other open.
+ * An existing account is reported explicitly so the client can take the user
+ * back to the correct sign-in method instead of pretending another
+ * verification email was sent.
  */
 async function register({ fullName, email, password, phone }) {
-  const existingUser = await User.findOne({ email }).select("fullName").lean();
+  const existingUser = await User.findOne({ email }).select("authProviders").lean();
 
   if (existingUser) {
-    // Tell the real owner of the address that someone tried, rather than
-    // telling the person who tried. If it was them, this is the nudge they
-    // need; if it was not, they learn their address is in use here.
-    //
-    // Addressed with the *account holder's* name, not the one just submitted -
-    // otherwise the notice hands a stranger's chosen name to the real owner,
-    // and lets a signup attempt put arbitrary text in someone else's inbox.
-    await notifyExistingAccount({
-      email,
-      fullName: existingUser.fullName,
-    }).catch((error) =>
-      logger.error({ err: error }, "Failed to send existing-account notice")
-    );
-    return;
+    throw ApiError.conflict(existingAccountMessage(existingUser), {
+      code: "EMAIL_ALREADY_REGISTERED",
+      errors: [{ field: "email", message: "This email is already registered" }],
+    });
   }
 
   const { token, tokenHash } = createSecureToken();
@@ -396,9 +383,9 @@ async function resendVerification(email) {
  *
  * Three cases, in priority order:
  *
- *   1. **Known provider id** - a returning social user. Sign them in.
- *   2. **Known email** - they already have an account. Link this provider to
- *      it rather than creating a second account for the same person.
+ *   1. **Known provider id** - a returning social-only user. Sign them in.
+ *   2. **Known email** - refuse an email/password account; otherwise link the
+ *      additional social provider rather than creating a duplicate account.
  *   3. **Neither** - create the account. No email-verification step: the
  *      provider has already verified the address, which is the whole point of
  *      delegating identity to them.
@@ -424,6 +411,7 @@ async function socialLogin(type, token, context = {}) {
   }).select("+tokenVersion +sessions +socialAccounts");
 
   if (byProviderId) {
+    assertSocialSignInAllowed(byProviderId);
     assertCanSignIn(byProviderId);
     byProviderId.lastLoginAt = new Date();
     return issueSession(byProviderId, context);
@@ -439,12 +427,16 @@ async function socialLogin(type, token, context = {}) {
     );
   }
 
-  // 2. Existing account for the same person - link, do not duplicate.
+  // 2. Existing account for the same email. Password accounts stay strictly
+  // email/password accounts; possession of a matching Google/Facebook email
+  // must not silently add a new sign-in method. Social-only accounts may link
+  // another social provider, preserving the one-user-per-email constraint.
   const byEmail = await User.findOne({ email: profile.email }).select(
     "+tokenVersion +sessions +socialAccounts"
   );
 
   if (byEmail) {
+    assertSocialSignInAllowed(byEmail);
     assertCanSignIn(byEmail);
 
     byEmail.socialAccounts.push({
@@ -508,6 +500,18 @@ function assertCanSignIn(user) {
   );
 }
 
+function assertSocialSignInAllowed(user) {
+  if (!user.hasProvider(AUTH_PROVIDERS.EMAIL)) return;
+
+  throw ApiError.conflict(
+    "This account was created with email and password. Please sign in with your email and password.",
+    {
+      code: "EMAIL_LOGIN_REQUIRED",
+      errors: [{ field: "email", message: "Sign in with email and password" }],
+    }
+  );
+}
+
 function titleCase(value) {
   return value.charAt(0) + value.slice(1).toLowerCase();
 }
@@ -525,12 +529,18 @@ async function login({ email, password }, context = {}) {
     throw ApiError.unauthorized("Invalid email or password", { code: "INVALID_CREDENTIALS" });
   }
 
+  // A social-only account has no email password to compare. Tell the client
+  // which button to show instead of presenting an unhelpful wrong-password
+  // error for a credential that can never exist.
+  if (!user.password) {
+    throw ApiError.unauthorized(socialLoginRequiredMessage(user), {
+      code: "SOCIAL_LOGIN_REQUIRED",
+      errors: [{ field: "email", message: socialProviderInstruction(user) }],
+    });
+  }
+
   const passwordMatches = await user.comparePassword(password);
 
-  // Also the path a Facebook-only account takes: `comparePassword` returns
-  // false when there is no stored hash, so it fails here with the same
-  // generic message - which is correct, since revealing "this address signs
-  // in with Facebook" would leak that the account exists.
   if (!passwordMatches) {
     throw ApiError.unauthorized("Invalid email or password", { code: "INVALID_CREDENTIALS" });
   }
@@ -617,19 +627,29 @@ async function logoutAll(userId) {
 /**
  * Step 1 of password recovery: email a single-use reset link.
  *
- * Returns nothing and never reveals whether the address exists - the same
- * enumeration reasoning as login and signup. A caller who could tell "no
- * account" from "email sent" would have a free membership oracle.
- *
- * A social-only account may reset too: they own the address, and the flow
- * gives them a password to sign in with alongside Facebook or Google. That
- * adds EMAIL to their providers rather than replacing anything.
+ * Unknown addresses and social-only accounts are reported explicitly so the
+ * client can distinguish a typo from an account that must use Google or
+ * Facebook. A reset link is sent only to an account that already has an email
+ * password.
  */
 async function forgotPassword(email) {
   const user = await User.findOne({ email }).select("+tokenVersion");
 
-  // Silent success for an unknown or deactivated account.
-  if (!user || !user.canSignIn()) return;
+  if (!user) {
+    throw ApiError.notFound("No account is registered with this email address.", {
+      code: "ACCOUNT_NOT_FOUND",
+      errors: [{ field: "email", message: "No account is registered with this email" }],
+    });
+  }
+
+  assertCanSignIn(user);
+
+  if (!user.hasProvider(AUTH_PROVIDERS.EMAIL)) {
+    throw ApiError.conflict(socialPasswordResetMessage(user), {
+      code: "SOCIAL_LOGIN_REQUIRED",
+      errors: [{ field: "email", message: socialProviderInstruction(user) }],
+    });
+  }
 
   const { token, tokenHash } = createSecureToken();
 
@@ -715,7 +735,7 @@ async function changePassword(userId, { currentPassword, newPassword }) {
   // current password", which is both wrong and impossible to act on.
   if (!user.hasProvider(AUTH_PROVIDERS.EMAIL)) {
     throw ApiError.badRequest(
-      "This account signs in with Facebook and has no password to change.",
+      `This account signs in with ${providerNames(user)} and has no password to change.`,
       { code: "PASSWORD_NOT_SET" }
     );
   }
@@ -773,8 +793,37 @@ function createSecureToken() {
   return { token, tokenHash: hashToken(token) };
 }
 
-async function notifyExistingAccount({ email, fullName }) {
-  await sendMail({ to: email, ...existingAccountEmail({ fullName }) });
+function socialProviders(user) {
+  return (user.authProviders ?? []).filter((provider) => provider !== AUTH_PROVIDERS.EMAIL);
+}
+
+function providerNames(user) {
+  const names = socialProviders(user).map(titleCase);
+
+  if (names.length <= 1) return names[0] ?? "your social provider";
+  return `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`;
+}
+
+function socialProviderInstruction(user) {
+  return `Continue with ${providerNames(user)}`;
+}
+
+function socialLoginRequiredMessage(user) {
+  const providers = providerNames(user);
+  return `This account was created with ${providers} and does not have an email password. Please continue with ${providers}.`;
+}
+
+function socialPasswordResetMessage(user) {
+  const providers = providerNames(user);
+  return `This account uses ${providers} sign-in and has no password to reset. Please continue with ${providers}.`;
+}
+
+function existingAccountMessage(user) {
+  if (user.authProviders?.includes(AUTH_PROVIDERS.EMAIL)) {
+    return "An account with this email already exists. Please sign in with your email and password.";
+  }
+
+  return `An account with this email already exists. ${socialProviderInstruction(user)}.`;
 }
 
 function safeJti(refreshToken) {

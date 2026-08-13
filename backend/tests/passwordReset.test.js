@@ -44,16 +44,37 @@ describe("POST /auth/forgot-password", () => {
     expect(stored.passwordResetTokenHash).toHaveLength(64); // sha256 hex
   });
 
-  it("answers 200 for an unknown address and sends nothing", async () => {
+  it("returns an error for an unknown address and sends nothing", async () => {
     const unknown = uniqueEmail("ghost");
 
     const response = await request(app)
       .post(`${API}/auth/forgot-password`)
       .send({ email: unknown });
 
-    // Identical to the success case - no membership oracle.
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
+    expect(response.body.code).toBe("ACCOUNT_NOT_FOUND");
     expect(lastMessageTo(unknown)).toBeNull();
+  });
+
+  it("tells a social-only account which provider to use instead", async () => {
+    const email = uniqueEmail("social-reset");
+    await User.create({
+      fullName: "Facebook User",
+      email,
+      authProviders: [AUTH_PROVIDERS.FACEBOOK],
+      socialAccounts: [{ provider: AUTH_PROVIDERS.FACEBOOK, providerId: "fb-reset-only" }],
+      emailVerifiedAt: new Date(),
+    });
+
+    const response = await request(app)
+      .post(`${API}/auth/forgot-password`)
+      .send({ email });
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("SOCIAL_LOGIN_REQUIRED");
+    expect(response.body.message).toMatch(/Facebook/i);
+    expect(response.body.message).toMatch(/no password to reset/i);
+    expect(lastMessageTo(email)).toBeNull();
   });
 
   it("invalidates any previous link when a new one is issued", async () => {
@@ -186,30 +207,4 @@ describe("POST /auth/reset-password", () => {
     expect(lastMessageTo(email).subject).toMatch(/password was changed/i);
   });
 
-  it("gives a social-only account a password, adding EMAIL as a method", async () => {
-    const email = uniqueEmail("socialonly");
-    await User.create({
-      fullName: "Social Only",
-      email,
-      authProviders: [AUTH_PROVIDERS.GOOGLE],
-      socialAccounts: [{ provider: AUTH_PROVIDERS.GOOGLE, providerId: "g-reset" }],
-      emailVerifiedAt: new Date(),
-    });
-
-    const token = await startReset(email);
-    expect(token).toEqual(expect.any(String));
-
-    const response = await request(app)
-      .post(`${API}/auth/reset-password`)
-      .send({ token, newPassword: "BrandNewP4ss" });
-    expect(response.status).toBe(200);
-
-    const login = await request(app)
-      .post(`${API}/auth/login`)
-      .send({ email, password: "BrandNewP4ss" });
-    expect(login.status).toBe(200);
-    expect(login.body.data.user.authProviders).toEqual(
-      expect.arrayContaining([AUTH_PROVIDERS.GOOGLE, AUTH_PROVIDERS.EMAIL])
-    );
-  });
 });

@@ -178,22 +178,24 @@ describe.each([
     expect(await User.countDocuments({ email })).toBe(1);
   });
 
-  it("links to an existing password account instead of duplicating it", async () => {
+  it("refuses social login for an existing email/password account", async () => {
     const email = uniqueEmail(`link-${type.toLowerCase()}`);
-    const existing = await createUserAndLogin(app, { email });
+    await createUserAndLogin(app, { email });
 
     stub(withEmail(`${type}-200`, email));
     const response = await request(app).post(SOCIAL).send({ type, token: TOKEN });
 
-    expect(response.status).toBe(200);
-    expect(response.body.data.user.id).toBe(existing.id);
-    expect(response.body.data.user.authProviders).toEqual(
-      expect.arrayContaining([AUTH_PROVIDERS.EMAIL, type])
-    );
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("EMAIL_LOGIN_REQUIRED");
+    expect(response.body.message).toMatch(/email and password/i);
     expect(await User.countDocuments({ email })).toBe(1);
+
+    const stored = await User.findOne({ email }).select("+socialAccounts");
+    expect(stored.authProviders).toEqual([AUTH_PROVIDERS.EMAIL]);
+    expect(stored.socialAccounts).toHaveLength(0);
   });
 
-  it("leaves the original password working after linking", async () => {
+  it("leaves the original password working after refusing social login", async () => {
     const email = uniqueEmail(`stillworks-${type.toLowerCase()}`);
     await createUserAndLogin(app, { email });
 
@@ -250,12 +252,13 @@ describe.each([
     stub(withEmail(`${type}-700`, email));
     const signIn = await request(app).post(SOCIAL).send({ type, token: TOKEN });
 
-    // Generic message: naming the provider would confirm the address exists.
     const login = await request(app)
       .post(`${API}/auth/login`)
       .send({ email, password: "AnythingAtAll1" });
     expect(login.status).toBe(401);
-    expect(login.body.code).toBe("INVALID_CREDENTIALS");
+    expect(login.body.code).toBe("SOCIAL_LOGIN_REQUIRED");
+    expect(login.body.message).toMatch(new RegExp(type, "i"));
+    expect(login.body.message).toMatch(/does not have an email password/i);
 
     const change = await request(app)
       .post(`${API}/auth/change-password`)
@@ -263,6 +266,7 @@ describe.each([
       .send({ currentPassword: "Whatever1", newPassword: "BrandNewP4ss" });
     expect(change.status).toBe(400);
     expect(change.body.code).toBe("PASSWORD_NOT_SET");
+    expect(change.body.message).toMatch(new RegExp(type, "i"));
   });
 });
 
@@ -385,23 +389,25 @@ describe("Google-specific verification", () => {
 });
 
 describe("one person, both providers", () => {
-  it("links Google and Facebook to a single account", async () => {
+  it("allows a social-only account to link another social provider", async () => {
     const email = uniqueEmail("both");
-    const existing = await createUserAndLogin(app, { email });
 
     stubFacebook({ profile: { id: "fb-both", email } });
-    await request(app).post(SOCIAL).send({ type: "FACEBOOK", token: TOKEN });
+    const facebook = await request(app)
+      .post(SOCIAL)
+      .send({ type: "FACEBOOK", token: TOKEN });
 
     stubGoogle(googlePayload({ sub: "google-both", email }));
     const response = await request(app).post(SOCIAL).send({ type: "GOOGLE", token: TOKEN });
 
-    expect(response.body.data.user.id).toBe(existing.id);
+    expect(response.status).toBe(200);
+    expect(response.body.data.user.id).toBe(facebook.body.data.user.id);
     expect(response.body.data.user.authProviders).toEqual(
-      expect.arrayContaining(["EMAIL", "FACEBOOK", "GOOGLE"])
+      expect.arrayContaining(["FACEBOOK", "GOOGLE"])
     );
     expect(await User.countDocuments({ email })).toBe(1);
 
-    const stored = await User.findById(existing.id).select("+socialAccounts");
+    const stored = await User.findById(facebook.body.data.user.id).select("+socialAccounts");
     expect(stored.socialAccounts).toHaveLength(2);
   });
 });

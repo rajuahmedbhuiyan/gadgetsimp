@@ -92,9 +92,8 @@ async function verifyToken(token) {
 
   /**
    * Google can return an address it has not confirmed the user owns. Trusting
-   * it would be an account-takeover primitive: the linking step in the auth
-   * service joins a social identity to an existing password account by email,
-   * so an unverified address could be used to claim someone else's account.
+   * it would let someone create or link a social identity under an address
+   * they do not own. Only a Google-verified address may identify an account.
    */
   if (payload.email && payload.email_verified === false) {
     throw ApiError.unauthorized(

@@ -18,11 +18,10 @@
  *       collection never contains unverified or unreachable accounts.
  *
  *
- *       Returns `202 Accepted` with no user and no tokens. The response is
- *       deliberately identical whether or not the address is already
- *       registered - anything else would let a caller test which emails have
- *       accounts. If it was already taken, the real account holder is emailed
- *       a notice instead.
+ *       Returns `202 Accepted` with no user and no tokens. If the address is
+ *       already registered, returns `409 EMAIL_ALREADY_REGISTERED`; for a
+ *       social-only account the message also identifies Google or Facebook as
+ *       the sign-in method to use.
  *
  *
  *       The emailed link is valid for **10 minutes**. It is a bearer credential
@@ -49,7 +48,7 @@
  *               phone: { type: string, example: "+8801712345678" }
  *     responses:
  *       202:
- *         description: Confirmation email sent (or silently skipped if the address was taken).
+ *         description: Confirmation email sent.
  *         content:
  *           application/json:
  *             schema:
@@ -66,6 +65,11 @@
  *               message: Check your inbox. We have sent a link to confirm your email address - your account is created once you confirm.
  *               data: { email: raju@example.com }
  *       422: { $ref: '#/components/responses/ValidationError' }
+ *       409:
+ *         description: Email is already registered (`EMAIL_ALREADY_REGISTERED`).
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       429: { $ref: '#/components/responses/TooManyRequests' }
  *
  * /auth/verify-email:
@@ -320,9 +324,11 @@
  *       identity. A Google account whose email is not verified is rejected.
  *
  *
- *       If an account already exists for the same address, the provider is
- *       **linked** to it rather than creating a duplicate, and the user can
- *       then sign in by any linked method. If the provider shares no email
+ *       If the address belongs to an email/password account, social sign-in is
+ *       refused with `409 EMAIL_LOGIN_REQUIRED`; Google or Facebook is never
+ *       silently linked to a password account. If a social-only account uses
+ *       the same address, an additional social provider may be linked rather
+ *       than creating a duplicate. If the provider shares no email
  *       (a Facebook user who registered by phone, or declined the
  *       permission), the request fails with `SOCIAL_EMAIL_MISSING` and the
  *       client should fall back to email signup.
@@ -380,6 +386,11 @@
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       403: { $ref: '#/components/responses/Forbidden' }
+ *       409:
+ *         description: The email belongs to an email/password account (`EMAIL_LOGIN_REQUIRED`).
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       422: { $ref: '#/components/responses/ValidationError' }
  *       503:
  *         description: That provider is not configured on this server.
@@ -431,7 +442,9 @@
  *     description: >
  *       Returns an access token in the body and sets the refresh token cookie.
  *       Rate limited to 10 **failed** attempts per 15 minutes, keyed on IP and
- *       submitted email; successful sign-ins do not consume the budget.
+ *       submitted email; successful sign-ins do not consume the budget. If
+ *       the account is social-only, returns `SOCIAL_LOGIN_REQUIRED` and names
+ *       the provider the user originally used.
  *     security: []
  *     requestBody:
  *       required: true
@@ -456,9 +469,8 @@
  *                     data: { $ref: '#/components/schemas/AuthPayload' }
  *       401:
  *         description: >
- *           Invalid credentials. Deliberately identical whether the email is
- *           unknown or the password is wrong, so the endpoint cannot be used
- *           to discover which addresses are registered.
+ *           Invalid credentials, or a social-only account that must continue
+ *           with the provider named in the `SOCIAL_LOGIN_REQUIRED` message.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -537,14 +549,11 @@
  *       link invalidates any previous one.
  *
  *
- *       Always answers 200, whether or not the address has an account - a
- *       different response would make this a free membership oracle, which
- *       would undo the care taken over login and signup.
- *
- *
- *       A social-only account may reset too: they own the address, and it
- *       gives them a password to use alongside Google or Facebook. Limited to
- *       5 requests per hour, since it sends mail to an address the caller names.
+ *       Returns `404 ACCOUNT_NOT_FOUND` when the address is not registered.
+ *       A social-only account has no password to reset, so it returns `409
+ *       SOCIAL_LOGIN_REQUIRED` and identifies Google or Facebook as the
+ *       sign-in method. Limited to 5 requests per hour, since successful calls
+ *       send mail to an address the caller names.
  *     security: []
  *     requestBody:
  *       required: true
@@ -557,10 +566,20 @@
  *               email: { type: string, format: email, example: raju@example.com }
  *     responses:
  *       200:
- *         description: Accepted. Says nothing about whether the address exists.
+ *         description: Reset email sent to an email/password account.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ *       404:
+ *         description: No account is registered (`ACCOUNT_NOT_FOUND`).
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: Social-only account; use the named provider (`SOCIAL_LOGIN_REQUIRED`).
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       429: { $ref: '#/components/responses/TooManyRequests' }
  *
  * /auth/reset-password:

@@ -68,8 +68,8 @@ function requestContext(req) {
  * so there is no user or token to return. 202 Accepted says exactly that:
  * understood, not yet acted upon.
  *
- * The response is identical whether or not the address was already taken.
- * Anything else would let a caller test which emails are registered.
+ * An existing account is returned as a conflict by the service, allowing the
+ * frontend to route the user back to sign-in.
  */
 async function register(req, res) {
   await authService.register(req.validated.body);
@@ -250,14 +250,14 @@ async function logoutAll(req, res) {
 }
 
 /**
- * Answers 200 whether or not the address has an account. Anything else would
- * turn this into a free membership oracle.
+ * The service rejects unknown addresses and social-only accounts with a clear
+ * error. A successful response therefore means a reset email was sent.
  */
 async function forgotPassword(req, res) {
   await authService.forgotPassword(req.validated.body.email);
 
   return sendResponse(res, {
-    message: "If an account exists for that address, a reset link is on its way.",
+    message: "A password reset link has been sent to your email address.",
   });
 }
 

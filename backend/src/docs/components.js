@@ -165,11 +165,12 @@
  *         authProviders:
  *           type: array
  *           description: >
- *             Every way this account can sign in. An account created with a
- *             password that later links Facebook carries both and can use
- *             either. A Facebook-only account has no password, so
+ *             Every way this account can sign in. Email/password accounts use
+ *             EMAIL only; a social account may link Facebook and Google. A
+ *             Facebook-only account has no password, so
+ *             password login and reset return `SOCIAL_LOGIN_REQUIRED`, while
  *             `/auth/change-password` returns `PASSWORD_NOT_SET` for it.
- *           items: { type: string, enum: [EMAIL, FACEBOOK] }
+ *           items: { type: string, enum: [EMAIL, FACEBOOK, GOOGLE] }
  *           example: [EMAIL]
  *         phone: { type: string, example: "+8801712345678" }
  *         image:
