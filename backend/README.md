@@ -146,6 +146,14 @@ replica-set/Atlas deployments.
 right until it erases everyone's data. Non-local targets need
 `SEED_CONFIRM=yes`.
 
+`npm run seed` creates the development users plus a mobile-accessory catalog:
+10 brands, 10 categories, filterable attribute metadata, 100 products and
+generated product variations. The data intentionally includes real-world
+mobile accessory model names, real remote product/category images, simple
+products, variable products, low stock, stock-out products, backorder cases,
+brand images, product galleries and shared tags/attributes for related-product
+queries.
+
 ## Rate limiting
 
 Tiers by what abuse actually costs, each with its own counter namespace.
