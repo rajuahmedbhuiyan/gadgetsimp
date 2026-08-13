@@ -14,7 +14,8 @@
     "docs:export": "node scripts/export-openapi.js",
     "migrate:attributes": "node scripts/migrate-product-attributes.js",
     "test": "jest --runInBand",
-    "test:watch": "jest --watch --runInBand"
+    "test:watch": "jest --watch --runInBand",
+    "docs:frontend": "node scripts/generate-frontend-docs.js"
   },
   "keywords": [
     "ecommerce",
