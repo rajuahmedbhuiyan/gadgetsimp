@@ -11,12 +11,15 @@ export const metadata: Metadata = {
 export default function ForgotPasswordPage() {
   return (
     <AuthShell
-      title="Forgot your password"
+      title="Forgot your password?"
       description="We email a link that lets you set a new one."
       footer={
         <p>
           Remembered it?{" "}
-          <Link href="/login" className="underline underline-offset-4">
+          <Link
+            href="/login"
+            className="font-medium text-foreground underline underline-offset-4"
+          >
             Sign in
           </Link>
         </p>

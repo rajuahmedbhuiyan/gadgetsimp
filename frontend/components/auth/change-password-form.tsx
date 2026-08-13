@@ -4,8 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
+import {
+  AUTH_BUTTON,
+  ErrorSlot,
+  PasswordField,
+  PasswordStrengthMeter,
+} from "@/components/auth/controls";
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,11 +21,10 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { authApi } from "@/lib/api/auth";
 import { useAuth } from "@/lib/auth/auth-context";
-import { applyApiFieldErrors, errorCode, errorMessage } from "@/lib/auth/errors";
+import { errorCode, errorMessage } from "@/lib/auth/errors";
 import {
   changePasswordSchema,
   type ChangePasswordData,
@@ -36,14 +41,20 @@ export function ChangePasswordForm() {
   const form = useForm<ChangePasswordValues, unknown, ChangePasswordData>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
+    mode: "onTouched",
+    reValidateMode: "onChange",
   });
 
   const {
+    control,
     register,
     handleSubmit,
     setError,
     formState: { errors, isSubmitting },
   } = form;
+
+  // Feeds the strength meter without re-rendering on the other two fields.
+  const newPassword = useWatch({ control, name: "newPassword" }) ?? "";
 
   useEffect(() => {
     if (!done) return;
@@ -64,7 +75,6 @@ export function ChangePasswordForm() {
       setDone(true);
     } catch (error) {
       const code = errorCode(error);
-      applyApiFieldErrors(error, setError, ["currentPassword", "newPassword"]);
       // A 401 here means the current password was wrong, and it arrives
       // without an `errors[]` entry to hang on the control.
       if (code === "INVALID_CREDENTIALS") {
@@ -85,7 +95,7 @@ export function ChangePasswordForm() {
       <div className="flex flex-col gap-3 text-sm">
         <FormAlert
           message="Password changed. Every device has been signed out."
-          variant="default"
+          tone="info"
         />
         <p className="text-muted-foreground">Taking you to sign in…</p>
         <Link href="/login" className="underline underline-offset-4">
@@ -134,47 +144,59 @@ export function ChangePasswordForm() {
         <FieldGroup>
           <Field data-invalid={Boolean(errors.currentPassword)}>
             <FieldLabel htmlFor="currentPassword">Current password</FieldLabel>
-            <Input
+            <PasswordField
               id="currentPassword"
-              type="password"
+              placeholder="Your current password"
               autoComplete="current-password"
               aria-invalid={Boolean(errors.currentPassword)}
               {...register("currentPassword")}
             />
-            <FieldError errors={[errors.currentPassword]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.currentPassword]} />
+            </ErrorSlot>
           </Field>
 
           <Field data-invalid={Boolean(errors.newPassword)}>
             <FieldLabel htmlFor="change-new-password">New password</FieldLabel>
-            <Input
+            <PasswordField
               id="change-new-password"
-              type="password"
+              placeholder="At least 8 characters"
               autoComplete="new-password"
               aria-invalid={Boolean(errors.newPassword)}
               {...register("newPassword")}
             />
             <FieldDescription>
-              At least 8 characters, with an uppercase letter, a lowercase
-              letter and a number. It must differ from the current one.
+              It must differ from your current password.
             </FieldDescription>
-            <FieldError errors={[errors.newPassword]} />
+            {newPassword ? (
+              <PasswordStrengthMeter value={newPassword} />
+            ) : null}
+            <ErrorSlot>
+              <FieldError errors={[errors.newPassword]} />
+            </ErrorSlot>
           </Field>
 
           <Field data-invalid={Boolean(errors.confirmPassword)}>
             <FieldLabel htmlFor="change-confirm">Confirm new password</FieldLabel>
-            <Input
+            <PasswordField
               id="change-confirm"
-              type="password"
+              placeholder="Type it again"
               autoComplete="new-password"
               aria-invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
-            <FieldError errors={[errors.confirmPassword]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.confirmPassword]} />
+            </ErrorSlot>
           </Field>
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            className={AUTH_BUTTON}
+            disabled={isSubmitting}
+          >
             {isSubmitting ? <Spinner /> : null}
-            Change password
+            {isSubmitting ? "Changing…" : "Change password"}
           </Button>
         </FieldGroup>
       </form>

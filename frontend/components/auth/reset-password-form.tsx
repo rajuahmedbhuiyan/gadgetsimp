@@ -4,21 +4,25 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
+import {
+  AUTH_BUTTON,
+  ErrorSlot,
+  PasswordField,
+  PasswordStrengthMeter,
+} from "@/components/auth/controls";
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { authApi } from "@/lib/api/auth";
-import { applyApiFieldErrors, errorMessage } from "@/lib/auth/errors";
+import { errorMessage } from "@/lib/auth/errors";
 import {
   resetPasswordSchema,
   type ResetPasswordData,
@@ -32,14 +36,18 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
   const form = useForm<ResetPasswordValues, unknown, ResetPasswordData>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { newPassword: "", confirmPassword: "" },
+    mode: "onTouched",
+    reValidateMode: "onChange",
   });
 
   const {
+    control,
     register,
     handleSubmit,
-    setError,
     formState: { errors, isSubmitting },
   } = form;
+
+  const newPassword = useWatch({ control, name: "newPassword" }) ?? "";
 
   async function onSubmit(values: ResetPasswordData) {
     if (!token) return;
@@ -50,7 +58,6 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
       // sign in with here. Send them to login rather than faking a session.
       router.replace("/login?notice=password-reset");
     } catch (error) {
-      applyApiFieldErrors(error, setError, ["newPassword"]);
       setFormError(errorMessage(error));
     }
   }
@@ -76,36 +83,44 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
         <FieldGroup>
           <Field data-invalid={Boolean(errors.newPassword)}>
             <FieldLabel htmlFor="newPassword">New password</FieldLabel>
-            <Input
+            <PasswordField
               id="newPassword"
-              type="password"
+              placeholder="At least 8 characters"
               autoComplete="new-password"
               autoFocus
               aria-invalid={Boolean(errors.newPassword)}
               {...register("newPassword")}
             />
-            <FieldDescription>
-              At least 8 characters, with an uppercase letter, a lowercase
-              letter and a number.
-            </FieldDescription>
-            <FieldError errors={[errors.newPassword]} />
+            {newPassword ? (
+              <PasswordStrengthMeter value={newPassword} />
+            ) : (
+              <ErrorSlot>
+                <FieldError errors={[errors.newPassword]} />
+              </ErrorSlot>
+            )}
           </Field>
 
           <Field data-invalid={Boolean(errors.confirmPassword)}>
             <FieldLabel htmlFor="reset-confirm">Confirm password</FieldLabel>
-            <Input
+            <PasswordField
               id="reset-confirm"
-              type="password"
+              placeholder="Type it again"
               autoComplete="new-password"
               aria-invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
-            <FieldError errors={[errors.confirmPassword]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.confirmPassword]} />
+            </ErrorSlot>
           </Field>
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            className={AUTH_BUTTON}
+            disabled={isSubmitting}
+          >
             {isSubmitting ? <Spinner /> : null}
-            Set new password
+            {isSubmitting ? "Saving…" : "Set new password"}
           </Button>
         </FieldGroup>
       </form>

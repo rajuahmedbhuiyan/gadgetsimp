@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { FaFacebookF } from "react-icons/fa6";
+
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -58,11 +60,15 @@ export function FacebookSignInButton({
     <Button
       type="button"
       variant="outline"
-      className="w-full"
+      className="h-12 w-full cursor-pointer gap-2.5 rounded-field text-sm font-medium hover:border-brand/50 hover:bg-muted"
       onClick={handleClick}
       disabled={disabled || pending || !ready}
     >
-      {pending ? <Spinner /> : null}
+      {pending ? (
+        <Spinner />
+      ) : (
+        <FaFacebookF className="size-4 text-[#1877F2]" aria-hidden />
+      )}
       Continue with Facebook
     </Button>
   );

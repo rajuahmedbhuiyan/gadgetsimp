@@ -12,10 +12,10 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { AuthInput, ErrorSlot } from "@/components/auth/controls";
 import { Spinner } from "@/components/ui/spinner";
 import { authApi } from "@/lib/api/auth";
-import { applyApiFieldErrors, errorMessage } from "@/lib/auth/errors";
+import { errorMessage } from "@/lib/auth/errors";
 import {
   emailOnlySchema,
   type EmailOnlyData,
@@ -49,7 +49,6 @@ export function ResendVerificationForm({
   const {
     register,
     handleSubmit,
-    setError,
     formState: { errors, isSubmitting },
   } = form;
 
@@ -60,14 +59,13 @@ export function ResendVerificationForm({
       const response = await authApi.resendVerification(values.email);
       setSent(response.message);
     } catch (error) {
-      applyApiFieldErrors(error, setError, ["email"]);
       setFailure(errorMessage(error));
     }
   }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      {sent ? <FormAlert message={sent} variant="default" /> : null}
+      {sent ? <FormAlert message={sent} tone="info" /> : null}
       {failure ? <FormAlert message={failure} /> : null}
 
       <FieldGroup>
@@ -76,18 +74,25 @@ export function ResendVerificationForm({
         ) : (
           <Field data-invalid={Boolean(errors.email)}>
             <FieldLabel htmlFor="resend-email">Email</FieldLabel>
-            <Input
+            <AuthInput
               id="resend-email"
               type="email"
               autoComplete="email"
               aria-invalid={Boolean(errors.email)}
               {...register("email")}
             />
-            <FieldError errors={[errors.email]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.email]} />
+            </ErrorSlot>
           </Field>
         )}
 
-        <Button type="submit" variant="outline" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          variant="outline"
+          className="h-11 w-full cursor-pointer gap-2 text-sm font-medium"
+          disabled={isSubmitting}
+        >
           {isSubmitting ? <Spinner /> : null}
           {label}
         </Button>

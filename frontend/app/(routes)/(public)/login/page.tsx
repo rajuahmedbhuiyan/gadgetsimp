@@ -16,11 +16,14 @@ export default async function LoginPage(props: PageProps<"/login">) {
   return (
     <AuthShell
       title="Sign in"
-      description="Welcome back to GadgetSimp."
+      description="Welcome back. Sign in to track orders and check out faster."
       footer={
         <p>
           New here?{" "}
-          <Link href="/register" className="underline underline-offset-4">
+          <Link
+            href="/register"
+            className="font-medium text-foreground underline underline-offset-4"
+          >
             Create an account
           </Link>
         </p>

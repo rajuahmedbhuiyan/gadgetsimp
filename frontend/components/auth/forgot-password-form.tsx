@@ -5,6 +5,7 @@ import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 
+import { AUTH_BUTTON, AuthInput, ErrorSlot } from "@/components/auth/controls";
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,10 +14,9 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { authApi } from "@/lib/api/auth";
-import { applyApiFieldErrors, errorMessage } from "@/lib/auth/errors";
+import { errorMessage } from "@/lib/auth/errors";
 import {
   emailOnlySchema,
   type EmailOnlyData,
@@ -30,12 +30,13 @@ export function ForgotPasswordForm() {
   const form = useForm<EmailOnlyValues, unknown, EmailOnlyData>({
     resolver: zodResolver(emailOnlySchema),
     defaultValues: { email: "" },
+    mode: "onTouched",
+    reValidateMode: "onChange",
   });
 
   const {
     register,
     handleSubmit,
-    setError,
     formState: { errors, isSubmitting },
   } = form;
 
@@ -47,23 +48,23 @@ export function ForgotPasswordForm() {
       // found" - that would turn this form into an address oracle.
       setSent(true);
     } catch (error) {
-      applyApiFieldErrors(error, setError, ["email"]);
       setFormError(errorMessage(error));
     }
   }
 
   if (sent) {
     return (
-      <div className="flex flex-col gap-4 text-sm">
-        <p>
+      <div>
+        <FormAlert message="Check your inbox" tone="success">
           If that address has an account, a reset link is on its way. It is
           valid for 10 minutes and can be used once.
-        </p>
-        <p className="text-muted-foreground">
-          <Link href="/login" className="underline underline-offset-4">
-            Back to sign in
-          </Link>
-        </p>
+        </FormAlert>
+        <Link
+          href="/login"
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Back to sign in
+        </Link>
       </div>
     );
   }
@@ -76,20 +77,28 @@ export function ForgotPasswordForm() {
         <FieldGroup>
           <Field data-invalid={Boolean(errors.email)}>
             <FieldLabel htmlFor="forgot-email">Email</FieldLabel>
-            <Input
+            <AuthInput
               id="forgot-email"
               type="email"
+              inputMode="email"
+              placeholder="you@example.com"
               autoComplete="email"
               autoFocus
               aria-invalid={Boolean(errors.email)}
               {...register("email")}
             />
-            <FieldError errors={[errors.email]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.email]} />
+            </ErrorSlot>
           </Field>
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            className={AUTH_BUTTON}
+            disabled={isSubmitting}
+          >
             {isSubmitting ? <Spinner /> : null}
-            Email me a reset link
+            {isSubmitting ? "Sending…" : "Email me a reset link"}
           </Button>
         </FieldGroup>
       </form>

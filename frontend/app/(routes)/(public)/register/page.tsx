@@ -12,11 +12,14 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title="Create an account"
-      description="We email you a link to confirm the address. The account is created when you open it."
+      description="We email a link to confirm your address — the account is created when you open it."
       footer={
         <p>
           Already have an account?{" "}
-          <Link href="/login" className="underline underline-offset-4">
+          <Link
+            href="/login"
+            className="font-medium text-foreground underline underline-offset-4"
+          >
             Sign in
           </Link>
         </p>

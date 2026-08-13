@@ -6,8 +6,6 @@
  * than the API can - and it is keyed on `code`, never on wording.
  */
 
-import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
-
 import { isApiError } from "@/lib/api/client";
 
 const CODE_MESSAGES: Record<string, string> = {
@@ -103,31 +101,4 @@ function formatSeconds(seconds: number) {
   if (seconds < 60) return `${Math.ceil(seconds)} seconds`;
   const minutes = Math.ceil(seconds / 60);
   return `${minutes} minute${minutes === 1 ? "" : "s"}`;
-}
-
-/**
- * Attach `errors[].field` messages to the matching form controls.
- *
- * Returns true if anything was attached, so a caller can decide whether the
- * top-level message still needs showing on its own.
- */
-export function applyApiFieldErrors<T extends FieldValues>(
-  error: unknown,
-  setError: UseFormSetError<T>,
-  fields: readonly Path<T>[],
-): boolean {
-  if (!isApiError(error)) return false;
-
-  const messages = error.fieldErrors;
-  let applied = false;
-
-  for (const field of fields) {
-    const message = messages[field as string];
-    if (message) {
-      setError(field, { type: "server", message });
-      applied = true;
-    }
-  }
-
-  return applied;
 }

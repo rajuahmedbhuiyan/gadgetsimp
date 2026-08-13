@@ -35,15 +35,22 @@ export const fullNameSchema = z
   .max(120, "Must be at most 120 characters")
   .regex(/^[\p{L}\p{M}][\p{L}\p{M}\s'.-]*$/u, "Enter a valid name");
 
-/** Optional in the API, so an empty control has to become an absent key. */
-export const optionalPhoneSchema = z
+/**
+ * A Bangladeshi mobile, entered as the local 11 digits (`01602817341`).
+ *
+ * The control shows a fixed `+88` prefix and holds only the digits, so this is
+ * what rejoins them into the `+8801602817341` the API stores. Optional in the
+ * API, so an empty control has to become an absent key rather than `""` -
+ * every request schema is strict and would 422 on the empty string.
+ */
+export const bdMobileSchema = z
   .string()
   .trim()
   .refine(
-    (value) => value === "" || /^\+?[\d\s-]{7,20}$/.test(value),
-    "Enter a valid phone number",
+    (value) => value === "" || /^01\d{9}$/.test(value),
+    "Enter an 11-digit number starting with 01",
   )
-  .transform((value) => (value === "" ? undefined : value));
+  .transform((value) => (value === "" ? undefined : `+88${value}`));
 
 const confirmField = z.string().min(1, "Confirm your password");
 
@@ -58,7 +65,7 @@ export const registerSchema = z
   .object({
     fullName: fullNameSchema,
     email: emailSchema,
-    phone: optionalPhoneSchema,
+    phone: bdMobileSchema,
     password: passwordSchema,
     confirmPassword: confirmField,
   })

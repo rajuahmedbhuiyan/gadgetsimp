@@ -3,22 +3,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
+import {
+  AUTH_BUTTON,
+  ErrorSlot,
+  PasswordField,
+  PasswordStrengthMeter,
+} from "@/components/auth/controls";
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { authApi } from "@/lib/api/auth";
 import type { PendingRegistration } from "@/lib/api/auth";
-import { applyApiFieldErrors, errorMessage } from "@/lib/auth/errors";
+import { errorMessage } from "@/lib/auth/errors";
 import {
   setPasswordSchema,
   type SetPasswordData,
@@ -43,14 +47,18 @@ export function SetPasswordForm({
   const form = useForm<SetPasswordValues, unknown, SetPasswordData>({
     resolver: zodResolver(setPasswordSchema),
     defaultValues: { password: "", confirmPassword: "" },
+    mode: "onTouched",
+    reValidateMode: "onChange",
   });
 
   const {
+    control,
     register,
     handleSubmit,
-    setError,
     formState: { errors, isSubmitting },
   } = form;
+
+  const password = useWatch({ control, name: "password" }) ?? "";
 
   async function onSubmit(values: SetPasswordData) {
     setFormError(null);
@@ -61,7 +69,6 @@ export function SetPasswordForm({
       );
       router.replace("/");
     } catch (error) {
-      applyApiFieldErrors(error, setError, ["password"]);
       setFormError(errorMessage(error));
     }
   }
@@ -80,38 +87,46 @@ export function SetPasswordForm({
         <FieldGroup>
           <Field data-invalid={Boolean(errors.password)}>
             <FieldLabel htmlFor="new-account-password">Password</FieldLabel>
-            <Input
+            <PasswordField
               id="new-account-password"
-              type="password"
+              placeholder="At least 8 characters"
               autoComplete="new-password"
               autoFocus
               aria-invalid={Boolean(errors.password)}
               {...register("password")}
             />
-            <FieldDescription>
-              At least 8 characters, with an uppercase letter, a lowercase
-              letter and a number.
-            </FieldDescription>
-            <FieldError errors={[errors.password]} />
+            {password ? (
+              <PasswordStrengthMeter value={password} />
+            ) : (
+              <ErrorSlot>
+                <FieldError errors={[errors.password]} />
+              </ErrorSlot>
+            )}
           </Field>
 
           <Field data-invalid={Boolean(errors.confirmPassword)}>
             <FieldLabel htmlFor="new-account-confirm">
               Confirm password
             </FieldLabel>
-            <Input
+            <PasswordField
               id="new-account-confirm"
-              type="password"
+              placeholder="Type it again"
               autoComplete="new-password"
               aria-invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
-            <FieldError errors={[errors.confirmPassword]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.confirmPassword]} />
+            </ErrorSlot>
           </Field>
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            className={AUTH_BUTTON}
+            disabled={isSubmitting}
+          >
             {isSubmitting ? <Spinner /> : null}
-            Finish signing up
+            {isSubmitting ? "Finishing…" : "Finish signing up"}
           </Button>
         </FieldGroup>
       </form>

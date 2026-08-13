@@ -104,6 +104,12 @@
   --spacing-header: var(--h-header);
   --spacing-tabbar: var(--h-tabbar);
 
+  /* One corner radius for every interactive box - inputs, selects, buttons,
+   * the `+88` prefix beside the phone field, the social buttons. They sit next
+   * to each other constantly, and a field that is rounder than its own submit
+   * button is the kind of thing you cannot unsee. */
+  --radius-field: 0.75rem;
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);

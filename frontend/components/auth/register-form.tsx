@@ -3,8 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
+import {
+  AUTH_BUTTON,
+  AuthInput,
+  ErrorSlot,
+  PasswordField,
+  PasswordStrengthMeter,
+  PhoneField,
+} from "@/components/auth/controls";
 import { FormAlert } from "@/components/auth/form-alert";
 import { ResendVerificationForm } from "@/components/auth/resend-verification-form";
 import { SocialSignIn } from "@/components/auth/social-sign-in";
@@ -16,11 +24,10 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useRedirectWhenAuthenticated } from "@/hooks/use-redirect-when-authenticated";
 import { authApi } from "@/lib/api/auth";
-import { applyApiFieldErrors, errorMessage } from "@/lib/auth/errors";
+import { errorMessage } from "@/lib/auth/errors";
 import {
   registerSchema,
   type RegisterData,
@@ -43,14 +50,20 @@ export function RegisterForm() {
       password: "",
       confirmPassword: "",
     },
+    mode: "onTouched",
+    reValidateMode: "onChange",
   });
 
   const {
+    control,
     register,
     handleSubmit,
-    setError,
     formState: { errors, isSubmitting },
   } = form;
+
+  // Feeds the strength meter. Subscribing to the one field keeps the rest of
+  // the form from re-rendering on every keystroke.
+  const password = useWatch({ control, name: "password" }) ?? "";
 
   async function onSubmit(values: RegisterData) {
     setFormError(null);
@@ -64,12 +77,6 @@ export function RegisterForm() {
       // 202: understood, not yet acted upon. No account, no session, no token.
       setPendingEmail(values.email);
     } catch (error) {
-      applyApiFieldErrors(error, setError, [
-        "fullName",
-        "email",
-        "phone",
-        "password",
-      ]);
       setFormError(errorMessage(error));
     }
   }
@@ -84,75 +91,91 @@ export function RegisterForm() {
         <FieldGroup>
           <Field data-invalid={Boolean(errors.fullName)}>
             <FieldLabel htmlFor="fullName">Full name</FieldLabel>
-            <Input
+            <AuthInput
               id="fullName"
+              placeholder="Rahim Uddin"
               autoComplete="name"
               autoFocus
               aria-invalid={Boolean(errors.fullName)}
               {...register("fullName")}
             />
-            <FieldDescription>
-              One field - a single word is a valid name.
-            </FieldDescription>
-            <FieldError errors={[errors.fullName]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.fullName]} />
+            </ErrorSlot>
           </Field>
 
           <Field data-invalid={Boolean(errors.email)}>
             <FieldLabel htmlFor="register-email">Email</FieldLabel>
-            <Input
+            <AuthInput
               id="register-email"
               type="email"
+              inputMode="email"
+              placeholder="you@example.com"
               autoComplete="email"
               aria-invalid={Boolean(errors.email)}
               {...register("email")}
             />
-            <FieldError errors={[errors.email]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.email]} />
+            </ErrorSlot>
           </Field>
 
           <Field data-invalid={Boolean(errors.phone)}>
             <FieldLabel htmlFor="phone">Phone (optional)</FieldLabel>
-            <Input
+            <PhoneField
               id="phone"
-              type="tel"
-              autoComplete="tel"
-              placeholder="+8801712345678"
               aria-invalid={Boolean(errors.phone)}
               {...register("phone")}
             />
-            <FieldError errors={[errors.phone]} />
+            <FieldDescription>
+              11 digits, starting with 01.
+            </FieldDescription>
+            <ErrorSlot>
+              <FieldError errors={[errors.phone]} />
+            </ErrorSlot>
           </Field>
 
           <Field data-invalid={Boolean(errors.password)}>
             <FieldLabel htmlFor="register-password">Password</FieldLabel>
-            <Input
+            <PasswordField
               id="register-password"
-              type="password"
+              placeholder="At least 8 characters"
               autoComplete="new-password"
               aria-invalid={Boolean(errors.password)}
               {...register("password")}
             />
-            <FieldDescription>
-              At least 8 characters, with an uppercase letter, a lowercase
-              letter and a number.
-            </FieldDescription>
-            <FieldError errors={[errors.password]} />
+            {/* The live checklist says what is still missing, so the field
+                error underneath would only repeat it. */}
+            {password ? (
+              <PasswordStrengthMeter value={password} />
+            ) : (
+              <ErrorSlot>
+                <FieldError errors={[errors.password]} />
+              </ErrorSlot>
+            )}
           </Field>
 
           <Field data-invalid={Boolean(errors.confirmPassword)}>
             <FieldLabel htmlFor="confirmPassword">Confirm password</FieldLabel>
-            <Input
+            <PasswordField
               id="confirmPassword"
-              type="password"
+              placeholder="Type it again"
               autoComplete="new-password"
               aria-invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
-            <FieldError errors={[errors.confirmPassword]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.confirmPassword]} />
+            </ErrorSlot>
           </Field>
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            className={AUTH_BUTTON}
+            disabled={isSubmitting}
+          >
             {isSubmitting ? <Spinner /> : null}
-            Create account
+            {isSubmitting ? "Creating account…" : "Create account"}
           </Button>
         </FieldGroup>
       </form>

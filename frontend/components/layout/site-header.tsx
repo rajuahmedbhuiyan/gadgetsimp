@@ -24,7 +24,19 @@ import { SearchBar } from "./search-bar";
 import { StickyHeader } from "./sticky-header";
 import { ThemeToggle } from "./theme-toggle";
 
-export function SiteHeader() {
+export function SiteHeader({
+  /**
+   * `auth` drops the two controls that pull a shopper out of signing in - the
+   * wishlist and the account button - while keeping the logo, search, the
+   * category menu and the cart. Those are navigation; the other two are
+   * detours (and the account button would be circular on a sign-in page).
+   */
+  variant = "default",
+}: {
+  variant?: "default" | "auth";
+}) {
+  const isAuth = variant === "auth";
+
   return (
     <StickyHeader>
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -39,7 +51,7 @@ export function SiteHeader() {
 
           <div className="ml-auto flex items-center gap-1 lg:ml-0">
             <ThemeToggle className="hidden sm:inline-flex" />
-            <HeaderActions />
+            <HeaderActions showWishlist={!isAuth} showAccount={!isAuth} />
           </div>
         </div>
 

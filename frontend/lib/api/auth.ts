@@ -9,7 +9,6 @@
 import { api, applySession, clearSession } from "./client";
 import type {
   ApiEnvelope,
-  AuthProviderName,
   Session,
   SocialProviderName,
   User,
@@ -118,11 +117,6 @@ export const authApi = {
     });
     applySession(response.data);
     return response;
-  },
-
-  /** What this deployment actually has configured. Drives which buttons render. */
-  providers() {
-    return api<{ providers: AuthProviderName[] }>("/auth/providers");
   },
 
   /*

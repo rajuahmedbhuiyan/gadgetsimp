@@ -94,7 +94,7 @@ export function VerifyEmailView({ token }: { token: string | null }) {
   if (state.kind === "signed-in") {
     return (
       <div className="flex flex-col gap-4">
-        <FormAlert message={state.message} variant="default" />
+        <FormAlert message={state.message} tone="info" />
         <p className="text-sm text-muted-foreground">
           Your account is ready and you are signed in. Taking you to the store…
         </p>

@@ -1,24 +1,33 @@
 import type { ReactNode } from "react";
 
-import { BrandLogo } from "@/components/layout/brand-logo";
-import { UserMenu } from "@/components/auth/user-menu";
+import { SiteHeader } from "@/components/layout/site-header";
 
 /**
  * The shell for sign-in, registration and password screens.
  *
- * Keeps the minimal header these pages have always had - a logo home and the
- * session state - without the storefront's nav, footer and bottom bar. A
- * shopper part-way through signing in should have one way forward and one way
- * out, not a full menu inviting them to wander off.
+ * The storefront navbar minus the two controls that would pull a shopper out
+ * of the one task they are on: the wishlist and the account button. The logo,
+ * search, the category menu and the cart stay, and the logo is still a link
+ * home.
+ *
+ * No footer and no bottom tab bar: `AuthShell` already fills the viewport, and
+ * a fixed bar at the bottom sits exactly where the submit button wants to be.
  */
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <header className="flex items-center justify-between gap-4 border-b px-4 py-3">
-        <BrandLogo className="h-7" />
-        <UserMenu />
-      </header>
-      {children}
+      <a
+        href="#main"
+        className="sr-only rounded-field bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-100"
+      >
+        Skip to content
+      </a>
+
+      <SiteHeader variant="auth" />
+
+      <main id="main" className="flex flex-1 flex-col">
+        {children}
+      </main>
     </>
   );
 }

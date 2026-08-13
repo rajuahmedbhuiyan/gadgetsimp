@@ -15,12 +15,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion, useReducedMotion, type Variants } from "motion/react";
+import { useReducedMotion } from "motion/react";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { heroSlides, type HeroSlide } from "@/lib/config/site";
-import { EASE_BRAND } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import {
   Carousel,
@@ -44,47 +43,6 @@ const AUTOPLAY_MS = 15_000;
  * should be over quickly, so the two are tuned in opposite directions.
  */
 const SCROLL_DURATION = 18;
-
-/**
- * The copy on a slide, arriving in sequence as that slide becomes the active
- * one. Driven by `animate`, not `whileInView` - the trigger is the carousel
- * changing slide, not the section scrolling into view.
- *
- * Orchestration only; the children own their own opacity and offset, so the
- * container never dims a child that is mid-animation.
- */
-const slideCopy: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.08, delayChildren: 0.15 } },
-  exit: { transition: { staggerChildren: 0.04 } },
-};
-
-/**
- * Three states, not two, so every line travels the same way: **upward**.
- *
- * With only `hidden` and `visible`, the slide being left over ran
- * `visible -> hidden`, which is `y: 0 -> +28` - downward - at the same moment
- * the incoming slide ran `+28 -> 0` upward. Both slides are on screen during
- * the transition, so the copy visibly moved in two directions at once.
- *
- * `exit` continues past the top instead of retreating, making the path
- * monotonic: waiting below (+28) -> in place (0) -> away above (-28).
- */
-const slideLine: Variants = {
-  hidden: { opacity: 0, y: 28 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.55, ease: EASE_BRAND },
-  },
-  exit: {
-    opacity: 0,
-    y: -28,
-    // Quicker than the entrance - it is leaving, and lingering would have it
-    // still fading while the next slide's copy is already settling.
-    transition: { duration: 0.35, ease: EASE_BRAND },
-  },
-};
 
 /**
  * Each slide's palette, as two mesh blobs and a hairline.
@@ -122,16 +80,6 @@ export function HeroSlider() {
   const [paused, setPaused] = useState(false);
   const reduceMotion = useReducedMotion();
 
-  // The slide we just came off, so it can run `exit` (continuing upward)
-  // rather than `hidden` (dropping back down). Derived during render with the
-  // "adjust state when a value changes" pattern - an effect would set it a
-  // paint too late, after the outgoing slide had already started moving.
-  const [previous, setPrevious] = useState<number | null>(null);
-  const [lastCurrent, setLastCurrent] = useState(0);
-  if (lastCurrent !== current) {
-    setPrevious(lastCurrent);
-    setLastCurrent(current);
-  }
 
   // Subscribing rather than reading: the callback runs on Embla's events, so
   // no state is set synchronously while the effect body runs.
@@ -178,59 +126,37 @@ export function HeroSlider() {
               <div className="relative flex min-h-[32rem] items-center overflow-hidden sm:min-h-[36rem] lg:min-h-[40rem]">
                 <Backdrop tone={slide.tone} />
 
-                {/* `initial={false}` matters twice over: the first slide's
-                    headline is the page's largest contentful paint and must
-                    ship visible rather than fading in on hydration, and a
-                    remount must not replay the entrance. From then on the
-                    `animate` state follows the active slide, so the copy
-                    arrives as its slide does. */}
-                <motion.div
-                  className="relative mx-auto flex w-full max-w-7xl flex-col items-start gap-6 px-4 py-16 sm:px-6 lg:px-8 lg:py-24"
-                  variants={slideCopy}
-                  initial={false}
-                  animate={
-                    index === current
-                      ? "visible"
-                      : index === previous
-                        ? "exit"
-                        : "hidden"
-                  }
-                >
-                  <motion.span
-                    variants={slideLine}
+                <div className="relative mx-auto flex w-full max-w-7xl flex-col items-start gap-6 px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+                  <span
                     className="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3.5 py-1.5 text-xs font-semibold backdrop-blur-sm text-brand-foreground dark:text-brand"
                   >
                     <Sparkles className="size-3.5" aria-hidden />
                     {slide.eyebrow}
-                  </motion.span>
+                  </span>
 
                   {/* `h1` on the first slide only - the rest are alternates of
                       the same banner, not extra top-level page headings. */}
                   {index === 0 ? (
-                    <motion.h1
-                      variants={slideLine}
+                    <h1
                       className="max-w-3xl font-heading text-[2.5rem] leading-[1.03] font-black tracking-tight text-balance sm:text-6xl lg:text-7xl"
                     >
                       {slide.title} <Highlight>{slide.highlight}</Highlight>
-                    </motion.h1>
+                    </h1>
                   ) : (
-                    <motion.p
-                      variants={slideLine}
+                    <p
                       className="max-w-3xl font-heading text-[2.5rem] leading-[1.03] font-black tracking-tight text-balance sm:text-6xl lg:text-7xl"
                     >
                       {slide.title} <Highlight>{slide.highlight}</Highlight>
-                    </motion.p>
+                    </p>
                   )}
 
-                  <motion.p
-                    variants={slideLine}
+                  <p
                     className="max-w-xl text-base leading-relaxed text-muted-foreground lg:text-lg"
                   >
                     {slide.description}
-                  </motion.p>
+                  </p>
 
-                  <motion.div
-                    variants={slideLine}
+                  <div
                     className="mt-2 flex flex-wrap items-center gap-3"
                   >
                     <Button
@@ -252,8 +178,8 @@ export function HeroSlider() {
                         {slide.secondary.label}
                       </Button>
                     )}
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
               </div>
             </CarouselItem>
           ))}

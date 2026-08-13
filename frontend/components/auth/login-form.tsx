@@ -5,6 +5,12 @@ import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 
+import {
+  AUTH_BUTTON,
+  AuthInput,
+  ErrorSlot,
+  PasswordField,
+} from "@/components/auth/controls";
 import { FormAlert } from "@/components/auth/form-alert";
 import { SocialSignIn } from "@/components/auth/social-sign-in";
 import { Button } from "@/components/ui/button";
@@ -14,11 +20,10 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useRedirectWhenAuthenticated } from "@/hooks/use-redirect-when-authenticated";
 import { useAuth } from "@/lib/auth/auth-context";
-import { applyApiFieldErrors, errorMessage } from "@/lib/auth/errors";
+import { errorMessage } from "@/lib/auth/errors";
 import { loginSchema, type LoginData, type LoginValues } from "@/lib/auth/schemas";
 
 export function LoginForm({
@@ -37,12 +42,16 @@ export function LoginForm({
   const form = useForm<LoginValues, unknown, LoginData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
+    // Nothing complains until a field has been left once; after that it
+    // revalidates on every keystroke, so a correction clears the error as it
+    // is typed instead of on the next submit.
+    mode: "onTouched",
+    reValidateMode: "onChange",
   });
 
   const {
     register,
     handleSubmit,
-    setError,
     formState: { errors, isSubmitting },
   } = form;
 
@@ -53,55 +62,68 @@ export function LoginForm({
     } catch (error) {
       // 401 here is INVALID_CREDENTIALS, which deliberately covers both an
       // unknown address and a wrong password - do not try to tell them apart.
-      applyApiFieldErrors(error, setError, ["email", "password"]);
       setFormError(errorMessage(error));
     }
   }
 
   return (
     <div>
-      {notice ? <FormAlert message={notice} variant="default" /> : null}
+      {notice ? <FormAlert message={notice} tone="info" /> : null}
       {formError ? <FormAlert message={formError} /> : null}
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <FieldGroup>
           <Field data-invalid={Boolean(errors.email)}>
             <FieldLabel htmlFor="email">Email</FieldLabel>
-            <Input
+            <AuthInput
               id="email"
               type="email"
+              inputMode="email"
+              placeholder="you@example.com"
               autoComplete="email"
               autoFocus
               aria-invalid={Boolean(errors.email)}
               {...register("email")}
             />
-            <FieldError errors={[errors.email]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.email]} />
+            </ErrorSlot>
           </Field>
 
           <Field data-invalid={Boolean(errors.password)}>
-            <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Input
+            {/* The reset link lives beside the label, which is where someone
+                who has just failed a sign-in looks for it. */}
+            <div className="flex items-baseline justify-between gap-3">
+              <FieldLabel htmlFor="password">Password</FieldLabel>
+              <Link
+                href="/forgot-password"
+                className="text-xs font-medium text-brand-foreground underline underline-offset-4 transition-colors hover:text-foreground dark:text-brand"
+              >
+                Forgot password?
+              </Link>
+            </div>
+            <PasswordField
               id="password"
-              type="password"
+              placeholder="Enter your password"
               autoComplete="current-password"
               aria-invalid={Boolean(errors.password)}
               {...register("password")}
             />
-            <FieldError errors={[errors.password]} />
+            <ErrorSlot>
+              <FieldError errors={[errors.password]} />
+            </ErrorSlot>
           </Field>
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            className={AUTH_BUTTON}
+            disabled={isSubmitting}
+          >
             {isSubmitting ? <Spinner /> : null}
-            Sign in
+            {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
         </FieldGroup>
       </form>
-
-      <div className="mt-3 text-sm">
-        <Link href="/forgot-password" className="underline underline-offset-4">
-          Forgot your password?
-        </Link>
-      </div>
 
       <SocialSignIn />
     </div>
