@@ -12,6 +12,7 @@
  * back is worse than a row that takes 200ms to go.
  */
 
+import { useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -19,13 +20,38 @@ import { cartApi, type Cart, type CartResponse, EMPTY_CART } from "@/lib/api/car
 import { isApiError } from "@/lib/api/client";
 import { errorMessage } from "@/lib/auth/errors";
 import { useAuth } from "@/lib/auth/auth-context";
+import {
+  clearGuestCart,
+  getGuestEntries,
+  getServerGuestEntries,
+  removeGuestEntries,
+  setGuestQuantity,
+  subscribeGuestCart,
+  toCart,
+} from "@/lib/cart/guest-cart";
 import { cartCountKey } from "./use-cart-count";
+
+/**
+ * The guest cart, as a `Cart`.
+ *
+ * Split out so `useCart` can read it unconditionally - hooks cannot be called
+ * behind an `if`, and the signed-in branch has to be able to ignore it.
+ */
+function useGuestCart(): Cart {
+  const entries = useSyncExternalStore(
+    subscribeGuestCart,
+    getGuestEntries,
+    getServerGuestEntries,
+  );
+  return toCart(entries);
+}
 
 export const cartKey = ["cart"] as const;
 
 export function useCart() {
   const { isAuthenticated, status } = useAuth();
   const queryClient = useQueryClient();
+  const guestCart = useGuestCart();
 
   const query = useQuery({
     queryKey: cartKey,
@@ -131,11 +157,44 @@ export function useCart() {
     onError: (error) => onFailure(error),
   });
 
+  /*
+   * Signed out, every write goes to `localStorage` instead of the API, and
+   * nothing is ever in flight - so the pending flags are all false and the
+   * callers need no branch of their own.
+   */
+  if (!isAuthenticated) {
+    return {
+      cart: guestCart,
+      // Only the session lookup can be pending; the local cart is synchronous.
+      isLoading: status === "loading",
+      isAuthenticated: false,
+      error: null,
+      refetch: () => Promise.resolve(),
+
+      setQuantity: ({ itemId, quantity }: { itemId: string; quantity: number }) =>
+        setGuestQuantity(itemId, quantity),
+      pendingQuantityFor: undefined,
+
+      removeItems: (itemIds: string[]) => {
+        removeGuestEntries(itemIds);
+        toast.success("Removed from your cart");
+      },
+      isRemoving: false,
+      removingIds: undefined,
+
+      clear: () => {
+        clearGuestCart();
+        toast.success("Your cart is empty");
+      },
+      isClearing: false,
+    };
+  }
+
   return {
     cart: query.data ?? EMPTY_CART,
     /** Distinguishes "still resolving the session" from "signed out". */
-    isLoading: status === "loading" || (isAuthenticated && query.isPending),
-    isAuthenticated,
+    isLoading: status === "loading" || query.isPending,
+    isAuthenticated: true,
     error: query.error,
     refetch: query.refetch,
 

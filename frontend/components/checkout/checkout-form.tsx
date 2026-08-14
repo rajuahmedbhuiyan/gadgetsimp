@@ -29,6 +29,7 @@ import {
   ordersApi,
   type PlaceOrderInput,
 } from "@/lib/api/orders";
+import { clearGuestCart } from "@/lib/cart/guest-cart";
 import { saveConfirmation } from "@/lib/checkout/confirmation";
 import {
   checkoutSchema,
@@ -49,6 +50,7 @@ import {
 import { FormAlert } from "@/components/auth/form-alert";
 import { SearchableSelect } from "./searchable-select";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldDescription,
@@ -116,6 +118,7 @@ export function CheckoutForm({
   } = form;
 
   const district = useWatch({ control, name: "district" }) ?? "";
+  const createAccount = useWatch({ control, name: "createAccount" }) ?? false;
   const deliveryFee = deliveryFeeFor(district);
 
   /**
@@ -180,6 +183,10 @@ export function CheckoutForm({
         // A retried key returns the original order rather than a second one.
         alreadyPlaced: response.code === "ORDER_ALREADY_PLACED",
       });
+
+      // The server empties a signed-in cart itself; the local one is ours to
+      // clear, and leaving it would show the just-ordered items again.
+      if (!isAuthenticated) clearGuestCart();
 
       // `replace`, so Back does not return to a form whose cart is now empty.
       router.replace("/checkout/success");
@@ -333,16 +340,53 @@ export function CheckoutForm({
           </div>
         </Section>
 
-        {/*
-         * No guest fields here on purpose.
-         *
-         * `POST /orders` accepts `email` + `createAccount` from a guest, but a
-         * guest cannot reach this page: the cart is server-side and signed-in
-         * only, so there is nothing to check out with until they log in. The
-         * schema still carries both fields, so the section can be added the
-         * day a local/guest cart exists - rendering it now would be UI no one
-         * can ever see.
-         */}
+        {/* Guests only - the API ignores both fields for a signed-in caller,
+            and a signed-in shopper already has an address on file. */}
+        {!isAuthenticated ? (
+          <Section title="Order updates">
+            <Field data-invalid={Boolean(errors.email)}>
+              <FieldLabel htmlFor="email">
+                Email{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  (optional)
+                </span>
+              </FieldLabel>
+              <AuthInput
+                id="email"
+                type="email"
+                inputMode="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                aria-invalid={Boolean(errors.email)}
+                {...register("email")}
+              />
+              <FieldDescription>
+                Where the receipt goes. The order is placed with or without it.
+              </FieldDescription>
+              <FieldError errors={[errors.email]} />
+            </Field>
+
+            <label className="flex cursor-pointer items-start gap-3 rounded-field border p-3.5 transition-colors hover:bg-muted/50">
+              <Checkbox
+                checked={createAccount}
+                onCheckedChange={(checked) =>
+                  setValue("createAccount", checked === true, {
+                    shouldValidate: true,
+                  })
+                }
+              />
+              <span>
+                <span className="block text-sm font-medium">
+                  Create an account from this order
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  We email a link to finish setting it up. Your order is placed
+                  either way, and this order attaches to the new account.
+                </span>
+              </span>
+            </label>
+          </Section>
+        ) : null}
 
         <Section title="Payment">
           <div className="flex items-start gap-3 rounded-field border-2 border-brand/40 bg-brand/8 p-4">

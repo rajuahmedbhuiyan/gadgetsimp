@@ -24,7 +24,6 @@ import { cn } from "@/lib/utils";
 import { discountPercent, formatPrice, humanise } from "@/lib/format";
 import { siteConfig, whatsappLink } from "@/lib/config/site";
 import type { ProductDetail, Variation } from "@/lib/api/shop";
-import { useAuth } from "@/lib/auth/auth-context";
 import { useAddToCart } from "@/hooks/use-add-to-cart";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,8 +43,7 @@ export function PurchasePanel({
   onSelectVariant: (variant: Variation) => void;
 }) {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
-  const { mutateAsync, isPending, isSuccess } = useAddToCart();
+  const { mutateAsync, isPending, isSuccess, reset } = useAddToCart();
   const [quantity, setQuantity] = useState(1);
 
   const isVariable = product.productType === "VARIABLE";
@@ -67,23 +65,38 @@ export function PurchasePanel({
   const maxQuantity = Math.max(1, ceiling);
 
   async function addToCart() {
-    if (!isAuthenticated) {
-      router.push(`/login?next=/shop/${product.slug}`);
-      return null;
-    }
-
     return mutateAsync({
       productId: product.id,
       // Sent only for VARIABLE - the API rejects it on a SIMPLE product.
       ...(isVariable && selected ? { variantId: selected.id } : {}),
       quantity,
+      // Read only when signed out, where there is no API to price a line.
+      snapshot: {
+        name: product.name,
+        slug: product.slug,
+        thumbnail: selected?.image ?? product.thumbnail ?? null,
+        productType: product.productType,
+        currency: product.currency,
+        unitPrice: price,
+        originalPrice: wasPrice ?? null,
+        variantLabel: selected
+          ? product.variantOptionKeys
+              .map((key) =>
+                selected.options[key] ? humanise(selected.options[key]) : null,
+              )
+              .filter(Boolean)
+              .join(" / ")
+          : null,
+        variantSku: selected?.sku ?? null,
+        maxQuantity: stock.trackInventory ? stock.quantity : null,
+      },
     });
   }
 
   async function buyNow() {
     try {
-      const result = await addToCart();
-      if (result) router.push("/cart");
+      await addToCart();
+      router.push("/cart");
     } catch {
       // `useAddToCart` has already surfaced the reason as a toast.
     }
@@ -141,6 +154,9 @@ export function PurchasePanel({
             // A new SKU has its own ceiling; carrying a quantity of 12 onto a
             // variant with 3 left would only earn a server-side adjustment.
             setQuantity(1);
+            // "Added" referred to the previous colour. Leaving it up implies
+            // this one is in the cart when it is not.
+            reset();
           }}
         />
       )}

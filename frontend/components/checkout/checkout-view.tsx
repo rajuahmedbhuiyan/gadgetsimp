@@ -3,11 +3,14 @@
 /**
  * The checkout page body, and the guards in front of it.
  *
- * Four states before the form is worth rendering: the session is still
- * resolving, the shopper is signed out, the cart is empty, or the cart holds
- * something that cannot be ordered. The last one matters most - the API
- * refuses the *whole* order if any line is unavailable, so letting someone
- * fill in an address first only wastes their time.
+ * Three states before the form is worth rendering: the session is still
+ * resolving, the cart is empty, or the cart holds something that cannot be
+ * ordered. The last one matters most - the API refuses the *whole* order if
+ * any line is unavailable, so letting someone fill in an address first only
+ * wastes their time.
+ *
+ * Being signed out is not one of them: `POST /orders` is public, and a guest
+ * carries their cart in `localStorage`.
  */
 
 import { useState } from "react";
@@ -17,13 +20,12 @@ import { ArrowLeft, ShoppingBag, TriangleAlert } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { DEFAULT_DISTRICT, deliveryFeeFor } from "@/lib/checkout/bangladesh";
 import { Button } from "@/components/ui/button";
-import { CartSignedOut } from "@/components/cart/cart-states";
 import { CheckoutSkeleton } from "./checkout-skeleton";
 import { CheckoutForm } from "./checkout-form";
 import { OrderReview } from "./order-review";
 
 export function CheckoutView() {
-  const { cart, isLoading, isAuthenticated } = useCart();
+  const { cart, isLoading } = useCart();
 
   /*
    * The district lives here rather than only inside the form, because the
@@ -34,7 +36,6 @@ export function CheckoutView() {
   const deliveryFee = deliveryFeeFor(district);
 
   if (isLoading) return <CheckoutSkeleton />;
-  if (!isAuthenticated) return <CartSignedOut />;
 
   if (cart.items.length === 0) {
     return (

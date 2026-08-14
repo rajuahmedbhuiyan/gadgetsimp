@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { GuestCartMerge } from "@/components/cart/guest-cart-merge";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -38,6 +39,9 @@ export default function StorefrontLayout({
       <SiteFooter />
       <MobileTabBar />
       <WhatsAppFab />
+
+      {/* Renders nothing; moves a guest cart onto the account at sign-in. */}
+      <GuestCartMerge />
     </>
   );
 }

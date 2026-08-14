@@ -19,13 +19,12 @@ import { ArrowLeft, Loader2, Trash2, TriangleAlert } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { CartLineRow } from "./cart-line-row";
 import { CartSummary } from "./cart-summary";
-import { CartEmpty, CartSignedOut, CartSkeleton } from "./cart-states";
+import { CartEmpty, CartSkeleton } from "./cart-states";
 
 export function CartView() {
   const {
     cart,
     isLoading,
-    isAuthenticated,
     setQuantity,
     pendingQuantityFor,
     removeItems,
@@ -43,7 +42,8 @@ export function CartView() {
   );
 
   if (isLoading) return <CartSkeleton />;
-  if (!isAuthenticated) return <CartSignedOut />;
+  // No sign-in wall: a guest cart lives in `localStorage` and checks out
+  // through the public order endpoint.
   if (cart.items.length === 0) return <CartEmpty />;
 
   return (

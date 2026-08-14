@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { GuestCartMerge } from "@/components/cart/guest-cart-merge";
 import { SiteHeader } from "@/components/layout/site-header";
 
 /**
@@ -24,6 +25,9 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
       </a>
 
       <SiteHeader variant="auth" />
+
+      {/* Signing in happens here, so this is where a guest cart is handed over. */}
+      <GuestCartMerge />
 
       <main id="main" className="flex flex-1 flex-col">
         {children}

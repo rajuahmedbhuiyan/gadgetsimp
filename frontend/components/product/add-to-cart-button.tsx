@@ -10,14 +10,14 @@
  *  - **VARIABLE** — navigates to the product page. A variable product is a
  *    family of SKUs; adding one without saying which leaves the warehouse
  *    guessing, and the API requires `variantId` for exactly that reason.
- *  - **SIMPLE and in stock** — adds one, right here.
+ *  - **SIMPLE and in stock** — adds one, right here, to the server cart or the
+ *    local one depending on whether anyone is signed in.
  */
 
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Settings2, ShoppingCart } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/lib/auth/auth-context";
 import { useAddToCart } from "@/hooks/use-add-to-cart";
 import { Button } from "@/components/ui/button";
 import type { ProductCard } from "@/lib/api/shop";
@@ -26,11 +26,10 @@ export function AddToCartButton({
   product,
   className,
 }: {
-  product: Pick<ProductCard, "id" | "slug" | "productType" | "inStock">;
+  product: ProductCard;
   className?: string;
 }) {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
   const { mutate, isPending, isSuccess } = useAddToCart();
 
   const base = cn("h-9 w-full gap-1.5 text-xs font-semibold", className);
@@ -69,13 +68,23 @@ export function AddToCartButton({
         event.preventDefault();
         event.stopPropagation();
 
-        // The cart is signed-in only; bounce back here afterwards.
-        if (!isAuthenticated) {
-          router.push(`/login?next=/shop/${product.slug}`);
-          return;
-        }
-
-        mutate({ productId: product.id, quantity: 1 });
+        mutate({
+          productId: product.id,
+          quantity: 1,
+          // Read only when signed out, where there is no API to price a line.
+          snapshot: {
+            name: product.name,
+            slug: product.slug,
+            thumbnail: product.thumbnail ?? null,
+            productType: product.productType,
+            currency: product.currency,
+            unitPrice: product.sellingPrice,
+            originalPrice: product.originalPrice ?? null,
+            variantLabel: null,
+            variantSku: null,
+            maxQuantity: null,
+          },
+        });
       }}
     >
       {isPending ? (

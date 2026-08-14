@@ -5,13 +5,19 @@
  *
  * `GET /cart/count` exists precisely so this can run on every page without
  * pricing lines or checking stock. It is signed-in only, so the query is
- * disabled for guests rather than firing a 401 on every navigation.
+ * disabled for guests, who are counted straight out of the local cart instead.
  */
 
+import { useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
+import {
+  getGuestEntries,
+  getServerGuestEntries,
+  subscribeGuestCart,
+} from "@/lib/cart/guest-cart";
 
 interface CartCount {
   /** Distinct lines. A product in two variants counts twice. */
@@ -25,6 +31,13 @@ export const cartCountKey = ["cart", "count"] as const;
 export function useCartCount() {
   const { isAuthenticated } = useAuth();
 
+  // Signed out there is nothing to ask, so the badge counts the local lines.
+  const guestEntries = useSyncExternalStore(
+    subscribeGuestCart,
+    getGuestEntries,
+    getServerGuestEntries,
+  );
+
   const { data, isPending } = useQuery({
     queryKey: cartCountKey,
     queryFn: async () => (await api<CartCount>("/cart/count")).data,
@@ -34,10 +47,17 @@ export function useCartCount() {
     staleTime: 30_000,
   });
 
+  if (!isAuthenticated) {
+    return {
+      count: guestEntries.reduce((sum, entry) => sum + entry.quantity, 0),
+      itemCount: guestEntries.length,
+      isLoading: false,
+    };
+  }
+
   return {
     count: data?.totalQuantity ?? 0,
     itemCount: data?.itemCount ?? 0,
-    /** Guests are not "loading" - they are known to have no server cart. */
-    isLoading: isAuthenticated && isPending,
+    isLoading: isPending,
   };
 }

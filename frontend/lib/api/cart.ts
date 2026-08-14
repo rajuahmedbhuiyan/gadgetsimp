@@ -115,6 +115,18 @@ export const cartApi = {
   },
 
   /**
+   * Add in bulk. Always a batch, including the one-item case.
+   *
+   * Merging is the server's job: something already in the cart has its line
+   * raised rather than duplicated, and the same product and variant twice in
+   * one batch is summed. That is what lets a guest cart be handed over whole
+   * at sign-in.
+   */
+  addItems(items: { productId: string; variantId?: string; quantity: number }[]) {
+    return api<CartResponse>("/cart/items", { method: "POST", body: { items } });
+  },
+
+  /**
    * Absolute quantities, not deltas, addressed by line id.
    *
    * **A quantity of 0 removes the line**, which is why the stepper never has

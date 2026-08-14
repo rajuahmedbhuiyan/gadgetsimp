@@ -42,15 +42,6 @@ export function ProductCard({
       )}
     >
       <div className="relative aspect-square overflow-hidden bg-muted/40">
-        <Link
-          href={`/shop/${product.slug}`}
-          // Stretched so the whole card is clickable while the buttons above
-          // it stay independently tappable.
-          className="absolute inset-0 z-10"
-        >
-          <span className="sr-only">{product.name}</span>
-        </Link>
-
         {product.thumbnail?.src ? (
           <Image
             src={product.thumbnail.src}
@@ -109,8 +100,26 @@ export function ProductCard({
           </p>
         )}
 
+        {/*
+          * The stretched link.
+          *
+          * The anchor wraps the product name - real text, so the link has an
+          * accessible name without an `sr-only` span - and its `::after`
+          * covers the whole card, which is what makes the image, the brand,
+          * the name and the price all navigate. Previously only the image did,
+          * because the overlay lived inside the image container.
+          *
+          * `z-10` keeps it under the wishlist heart and the add-to-cart
+          * button, both of which sit at `z-20` and stay independently
+          * clickable.
+          */}
         <h3 className="line-clamp-2 text-sm leading-snug font-medium transition-colors group-hover:text-brand">
-          {product.name}
+          <Link
+            href={`/shop/${product.slug}`}
+            className="after:absolute after:inset-0 after:z-10 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            {product.name}
+          </Link>
         </h3>
 
         <div className="mt-auto flex flex-wrap items-baseline gap-x-2 gap-y-0.5 pt-1">

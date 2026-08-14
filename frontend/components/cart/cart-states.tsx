@@ -1,5 +1,9 @@
 /**
- * The three screens that are not a list of items.
+ * The two screens that are not a list of items.
+ *
+ * There is no signed-out screen any more: a guest keeps their cart in
+ * `localStorage` and checks out through the public order endpoint, so being
+ * signed out is not a state the cart has to explain.
  *
  * Kept apart from `CartView` because each is a full-page state with its own
  * call to action, and nesting three of them inside the list component makes
@@ -7,7 +11,7 @@
  */
 
 import Link from "next/link";
-import { LogIn, ShoppingBag, ShoppingCart } from "lucide-react";
+import { ShoppingBag, ShoppingCart } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -51,35 +55,6 @@ export function CartEmpty() {
         render={<Link href="/shop" />}
       >
         Start shopping
-      </Button>
-    </Shell>
-  );
-}
-
-/**
- * The cart lives on the server, so there is nowhere to keep a guest's - this
- * is a sign-in prompt rather than an empty cart, and `next` brings them
- * straight back here afterwards.
- */
-export function CartSignedOut() {
-  return (
-    <Shell
-      icon={LogIn}
-      title="Sign in to see your cart"
-      description="Your cart is saved to your account, so it is waiting on whichever device you sign in from."
-    >
-      <Button
-        className="h-12 cursor-pointer gap-2 rounded-field px-6 text-sm font-semibold"
-        render={<Link href="/login?next=/cart" />}
-      >
-        Sign in
-      </Button>
-      <Button
-        variant="outline"
-        className="h-12 cursor-pointer rounded-field px-6 text-sm font-semibold"
-        render={<Link href="/register?next=/cart" />}
-      >
-        Create an account
       </Button>
     </Shell>
   );
