@@ -12,7 +12,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { AuthInput, ErrorSlot } from "@/components/auth/controls";
+import { AuthInput } from "@/components/auth/controls";
 import { Spinner } from "@/components/ui/spinner";
 import { authApi } from "@/lib/api/auth";
 import { errorMessage } from "@/lib/auth/errors";
@@ -81,9 +81,7 @@ export function ResendVerificationForm({
               aria-invalid={Boolean(errors.email)}
               {...register("email")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.email]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.email]} />
           </Field>
         )}
 

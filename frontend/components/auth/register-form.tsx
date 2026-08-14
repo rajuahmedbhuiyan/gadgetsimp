@@ -8,7 +8,6 @@ import { useForm, useWatch } from "react-hook-form";
 import {
   AUTH_BUTTON,
   AuthInput,
-  ErrorSlot,
   PasswordField,
   PasswordStrengthMeter,
   PhoneField,
@@ -50,7 +49,7 @@ export function RegisterForm() {
       password: "",
       confirmPassword: "",
     },
-    mode: "onTouched",
+    mode: "onSubmit",
     reValidateMode: "onChange",
   });
 
@@ -99,9 +98,7 @@ export function RegisterForm() {
               aria-invalid={Boolean(errors.fullName)}
               {...register("fullName")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.fullName]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.fullName]} />
           </Field>
 
           <Field data-invalid={Boolean(errors.email)}>
@@ -115,9 +112,7 @@ export function RegisterForm() {
               aria-invalid={Boolean(errors.email)}
               {...register("email")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.email]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.email]} />
           </Field>
 
           <Field data-invalid={Boolean(errors.phone)}>
@@ -130,9 +125,7 @@ export function RegisterForm() {
             <FieldDescription>
               11 digits, starting with 01.
             </FieldDescription>
-            <ErrorSlot>
-              <FieldError errors={[errors.phone]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.phone]} />
           </Field>
 
           <Field data-invalid={Boolean(errors.password)}>
@@ -149,9 +142,7 @@ export function RegisterForm() {
             {password ? (
               <PasswordStrengthMeter value={password} />
             ) : (
-              <ErrorSlot>
-                <FieldError errors={[errors.password]} />
-              </ErrorSlot>
+              <FieldError errors={[errors.password]} />
             )}
           </Field>
 
@@ -164,9 +155,7 @@ export function RegisterForm() {
               aria-invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.confirmPassword]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.confirmPassword]} />
           </Field>
 
           <Button

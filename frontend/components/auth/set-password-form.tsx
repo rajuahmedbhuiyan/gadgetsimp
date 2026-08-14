@@ -7,7 +7,6 @@ import { useForm, useWatch } from "react-hook-form";
 
 import {
   AUTH_BUTTON,
-  ErrorSlot,
   PasswordField,
   PasswordStrengthMeter,
 } from "@/components/auth/controls";
@@ -47,7 +46,7 @@ export function SetPasswordForm({
   const form = useForm<SetPasswordValues, unknown, SetPasswordData>({
     resolver: zodResolver(setPasswordSchema),
     defaultValues: { password: "", confirmPassword: "" },
-    mode: "onTouched",
+    mode: "onSubmit",
     reValidateMode: "onChange",
   });
 
@@ -98,9 +97,7 @@ export function SetPasswordForm({
             {password ? (
               <PasswordStrengthMeter value={password} />
             ) : (
-              <ErrorSlot>
-                <FieldError errors={[errors.password]} />
-              </ErrorSlot>
+              <FieldError errors={[errors.password]} />
             )}
           </Field>
 
@@ -115,9 +112,7 @@ export function SetPasswordForm({
               aria-invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.confirmPassword]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.confirmPassword]} />
           </Field>
 
           <Button

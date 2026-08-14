@@ -8,7 +8,6 @@ import { useForm, useWatch } from "react-hook-form";
 
 import {
   AUTH_BUTTON,
-  ErrorSlot,
   PasswordField,
   PasswordStrengthMeter,
 } from "@/components/auth/controls";
@@ -41,7 +40,7 @@ export function ChangePasswordForm() {
   const form = useForm<ChangePasswordValues, unknown, ChangePasswordData>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
-    mode: "onTouched",
+    mode: "onSubmit",
     reValidateMode: "onChange",
   });
 
@@ -151,9 +150,7 @@ export function ChangePasswordForm() {
               aria-invalid={Boolean(errors.currentPassword)}
               {...register("currentPassword")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.currentPassword]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.currentPassword]} />
           </Field>
 
           <Field data-invalid={Boolean(errors.newPassword)}>
@@ -171,9 +168,7 @@ export function ChangePasswordForm() {
             {newPassword ? (
               <PasswordStrengthMeter value={newPassword} />
             ) : null}
-            <ErrorSlot>
-              <FieldError errors={[errors.newPassword]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.newPassword]} />
           </Field>
 
           <Field data-invalid={Boolean(errors.confirmPassword)}>
@@ -185,9 +180,7 @@ export function ChangePasswordForm() {
               aria-invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.confirmPassword]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.confirmPassword]} />
           </Field>
 
           <Button

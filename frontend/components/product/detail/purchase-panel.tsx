@@ -325,7 +325,7 @@ function VariantPicker({
       {axes.map(({ key, values }) => (
         <div key={key}>
           <p className="mb-2 text-sm font-medium">
-            {humanise(key)}
+            {humanise(key)} :
             {selected?.options[key] ? (
               <span className="ml-1.5 font-normal text-muted-foreground">
                 {humanise(selected.options[key])}
@@ -377,34 +377,40 @@ function QuantityStepper({
   onChange: (next: number) => void;
 }) {
   return (
-    <div
-      className={cn(
-        "flex h-12 shrink-0 items-center rounded-field border",
-        disabled && "opacity-50",
-      )}
-    >
-      <StepButton
-        label="Decrease quantity"
-        disabled={disabled || value <= 1}
-        onClick={() => onChange(value - 1)}
+    <div className="flex shrink-0 flex-col gap-1">
+      {/* Labelled, so the two icon buttons beside "Add to cart" are not left
+          to be inferred. */}
+      {/* <span className="text-xs font-medium text-muted-foreground">Qty</span> */}
+      <div
+        className={cn(
+          "flex h-12 items-center rounded-field border",
+          disabled && "opacity-50",
+        )}
       >
-        <Minus className="size-4" aria-hidden />
-      </StepButton>
+        <StepButton
+          label="Decrease quantity"
+          disabled={disabled || value <= 1}
+          onClick={() => onChange(value - 1)}
+        >
+          <Minus className="size-4" aria-hidden />
+        </StepButton>
 
-      <span
-        aria-live="polite"
-        className="w-10 text-center text-sm font-semibold tabular-nums"
-      >
-        {value}
-      </span>
+        <span
+          aria-live="polite"
+          aria-label={`Quantity: ${value}`}
+          className="w-10 text-center text-base font-semibold tabular-nums"
+        >
+          {value}
+        </span>
 
-      <StepButton
-        label="Increase quantity"
-        disabled={disabled || value >= max}
-        onClick={() => onChange(value + 1)}
-      >
-        <Plus className="size-4" aria-hidden />
-      </StepButton>
+        <StepButton
+          label="Increase quantity"
+          disabled={disabled || value >= max}
+          onClick={() => onChange(value + 1)}
+        >
+          <Plus className="size-4" aria-hidden />
+        </StepButton>
+      </div>
     </div>
   );
 }
@@ -426,7 +432,8 @@ function StepButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex size-11 cursor-pointer items-center justify-center rounded-field text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      title={label}
+      className="flex size-11 cursor-pointer items-center justify-center rounded-field text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>

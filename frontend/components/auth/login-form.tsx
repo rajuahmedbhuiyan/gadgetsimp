@@ -8,7 +8,6 @@ import { useForm } from "react-hook-form";
 import {
   AUTH_BUTTON,
   AuthInput,
-  ErrorSlot,
   PasswordField,
 } from "@/components/auth/controls";
 import { FormAlert } from "@/components/auth/form-alert";
@@ -42,10 +41,7 @@ export function LoginForm({
   const form = useForm<LoginValues, unknown, LoginData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
-    // Nothing complains until a field has been left once; after that it
-    // revalidates on every keystroke, so a correction clears the error as it
-    // is typed instead of on the next submit.
-    mode: "onTouched",
+    mode: "onSubmit",
     reValidateMode: "onChange",
   });
 
@@ -85,9 +81,7 @@ export function LoginForm({
               aria-invalid={Boolean(errors.email)}
               {...register("email")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.email]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.email]} />
           </Field>
 
           <Field data-invalid={Boolean(errors.password)}>
@@ -109,9 +103,7 @@ export function LoginForm({
               aria-invalid={Boolean(errors.password)}
               {...register("password")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.password]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.password]} />
           </Field>
 
           <Button

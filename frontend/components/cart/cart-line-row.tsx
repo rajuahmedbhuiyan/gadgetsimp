@@ -9,9 +9,8 @@
  * that will not check out and no way to find out why. So the row renders
  * dimmed, says what is wrong, and keeps its remove button working.
  *
- * The stepper decrements to zero rather than switching to a delete call: the
- * API treats `quantity: 0` as a removal, which is what stops the classic "the
- * last one will not delete" bug.
+ * The stepper turns its minus into a bin at a quantity of one, so the last
+ * decrement removes the line instead of doing nothing - see `Stepper`.
  */
 
 import Image from "next/image";
@@ -138,6 +137,7 @@ export function CartLineRow({
               unitPrice={line.unitPrice}
               currency={line.currency}
               onChange={onQuantityChange}
+              onRemove={onRemove}
             />
           )}
 
@@ -159,6 +159,20 @@ export function CartLineRow({
   );
 }
 
+/**
+ * Quantity.
+ *
+ * Two things make this usable by someone who is not thinking about it:
+ *
+ *  - a visible **Qty** label, so the two small buttons are not left to be
+ *    inferred from their icons;
+ *  - at a quantity of one the minus becomes a **bin**, which removes the line.
+ *    A minus that silently does nothing is the single most confusing state a
+ *    stepper can be in, and the API treats `quantity: 0` as a removal anyway,
+ *    so the two actions were never really separate.
+ *
+ * At the ceiling the plus is disabled and says why, rather than just refusing.
+ */
 function Stepper({
   value,
   max,
@@ -166,6 +180,7 @@ function Stepper({
   unitPrice,
   currency,
   onChange,
+  onRemove,
 }: {
   value: number;
   max: number;
@@ -173,39 +188,55 @@ function Stepper({
   unitPrice: number | null;
   currency: string;
   onChange: (next: number) => void;
+  onRemove: () => void;
 }) {
+  const atLast = value <= 1;
+  const atCeiling = value >= max;
+
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-10 items-center rounded-field border">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span className="text-xs font-medium text-muted-foreground">Qty</span>
+
+      <div className="flex h-11 items-center rounded-field border">
         <StepButton
-          label="Decrease quantity"
-          // Zero is a removal at the API, but the row has its own Remove
-          // button - stopping at one keeps the two actions distinct.
-          disabled={busy || value <= 1}
-          onClick={() => onChange(value - 1)}
+          label={atLast ? "Remove this item" : "Decrease quantity"}
+          disabled={busy}
+          onClick={() => (atLast ? onRemove() : onChange(value - 1))}
+          className={atLast ? "hover:text-destructive" : undefined}
         >
-          <Minus className="size-3.5" aria-hidden />
+          {atLast ? (
+            <Trash2 className="size-4" aria-hidden />
+          ) : (
+            <Minus className="size-4" aria-hidden />
+          )}
         </StepButton>
 
         <span
           aria-live="polite"
-          className="w-9 text-center text-sm font-semibold tabular-nums"
+          aria-label={`Quantity: ${value}`}
+          className="w-10 text-center text-base font-semibold tabular-nums"
         >
           {value}
         </span>
 
         <StepButton
           label="Increase quantity"
-          disabled={busy || value >= max}
+          disabled={busy || atCeiling}
           onClick={() => onChange(value + 1)}
         >
-          <Plus className="size-3.5" aria-hidden />
+          <Plus className="size-4" aria-hidden />
         </StepButton>
       </div>
 
       {unitPrice != null ? (
         <span className="text-xs text-muted-foreground">
           {formatPrice(unitPrice, currency)} each
+        </span>
+      ) : null}
+
+      {atCeiling ? (
+        <span className="w-full text-xs text-warning">
+          That is all we have in stock.
         </span>
       ) : null}
     </div>
@@ -216,20 +247,26 @@ function StepButton({
   label,
   disabled,
   onClick,
+  className,
   children,
 }: {
   label: string;
   disabled?: boolean;
   onClick: () => void;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
+      title={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex size-9 cursor-pointer items-center justify-center rounded-field text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+      className={cn(
+        "flex size-10 cursor-pointer items-center justify-center rounded-field text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40",
+        className,
+      )}
     >
       {children}
     </button>

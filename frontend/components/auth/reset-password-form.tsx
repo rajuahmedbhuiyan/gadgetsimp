@@ -8,7 +8,6 @@ import { useForm, useWatch } from "react-hook-form";
 
 import {
   AUTH_BUTTON,
-  ErrorSlot,
   PasswordField,
   PasswordStrengthMeter,
 } from "@/components/auth/controls";
@@ -36,7 +35,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
   const form = useForm<ResetPasswordValues, unknown, ResetPasswordData>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { newPassword: "", confirmPassword: "" },
-    mode: "onTouched",
+    mode: "onSubmit",
     reValidateMode: "onChange",
   });
 
@@ -94,9 +93,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
             {newPassword ? (
               <PasswordStrengthMeter value={newPassword} />
             ) : (
-              <ErrorSlot>
-                <FieldError errors={[errors.newPassword]} />
-              </ErrorSlot>
+              <FieldError errors={[errors.newPassword]} />
             )}
           </Field>
 
@@ -109,9 +106,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
               aria-invalid={Boolean(errors.confirmPassword)}
               {...register("confirmPassword")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.confirmPassword]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.confirmPassword]} />
           </Field>
 
           <Button

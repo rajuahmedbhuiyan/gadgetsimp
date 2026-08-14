@@ -5,7 +5,7 @@ import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 
-import { AUTH_BUTTON, AuthInput, ErrorSlot } from "@/components/auth/controls";
+import { AUTH_BUTTON, AuthInput } from "@/components/auth/controls";
 import { FormAlert } from "@/components/auth/form-alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,7 +30,7 @@ export function ForgotPasswordForm() {
   const form = useForm<EmailOnlyValues, unknown, EmailOnlyData>({
     resolver: zodResolver(emailOnlySchema),
     defaultValues: { email: "" },
-    mode: "onTouched",
+    mode: "onSubmit",
     reValidateMode: "onChange",
   });
 
@@ -87,9 +87,7 @@ export function ForgotPasswordForm() {
               aria-invalid={Boolean(errors.email)}
               {...register("email")}
             />
-            <ErrorSlot>
-              <FieldError errors={[errors.email]} />
-            </ErrorSlot>
+            <FieldError errors={[errors.email]} />
           </Field>
 
           <Button

@@ -22,6 +22,18 @@ import { contact } from "@/lib/config/site";
 import type { CartSummary as Summary } from "@/lib/api/cart";
 import { Button } from "@/components/ui/button";
 
+/*
+ * A note on the two subtotals.
+ *
+ * `summary.subtotal` is already **net of the discount** - it is what the
+ * shopper pays. `summary.originalSubtotal` is the pre-discount figure and
+ * `discount` is the difference between them.
+ *
+ * Printing `subtotal`, then a discount line, then `subtotal` again as the
+ * total was arithmetic that did not add up on screen: 2,490 − 800 = 2,490.
+ * The "Subtotal" row has to be the *original*, so the discount below it has
+ * something to subtract from.
+ */
 export function CartSummary({ summary }: { summary: Summary }) {
   const { currency, subtotal, discount, checkoutReady, unavailableCount } =
     summary;
@@ -38,7 +50,7 @@ export function CartSummary({ summary }: { summary: Summary }) {
           label={`Subtotal (${summary.totalQuantity} ${
             summary.totalQuantity === 1 ? "item" : "items"
           })`}
-          value={formatPrice(subtotal, currency)}
+          value={formatPrice(summary.originalSubtotal, currency)}
         />
 
         {discount > 0 ? (

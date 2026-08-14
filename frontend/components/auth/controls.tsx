@@ -123,23 +123,6 @@ export function PhoneField({
 }
 
 /**
- * Holds the height of one line of error text, whether or not there is any.
- *
- * Without this, validating on blur is a trap: `FieldError` renders nothing
- * while a field is valid, so leaving an empty field inserts a new line and
- * pushes everything below it down. If that happens between the mousedown and
- * the mouseup of the click that caused the blur, the two land on different
- * elements, no `click` event is produced, and the first click on anything
- * below the field is silently swallowed - the second one works, because by
- * then the layout has settled.
- *
- * Reserving the line means the blur changes nothing about the geometry.
- */
-export function ErrorSlot({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-5 text-sm leading-5">{children}</div>;
-}
-
-/**
  * A strength bar plus the live rule checklist.
  *
  * Rendered only once there is something to judge, so an untouched form is not
