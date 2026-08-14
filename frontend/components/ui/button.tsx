@@ -1,3 +1,4 @@
+import * as React from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -44,12 +45,31 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  render,
+  nativeButton,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  /*
+   * Base UI assumes it is rendering a real `<button>` and warns loudly when a
+   * `render` prop swaps in something else - which, for a styled link, is most
+   * of the time. Rather than every call site remembering `nativeButton={false}`
+   * alongside `render={<Link/>}`, infer it: an explicit prop always wins, a
+   * `render` element that is not a `<button>` turns it off, and everything
+   * else keeps the native default.
+   *
+   * A function `render` cannot be inspected, so it is left alone and the
+   * caller can still pass the prop by hand.
+   */
+  const isNative =
+    nativeButton ??
+    (React.isValidElement(render) ? render.type === "button" : true)
+
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      render={render}
+      nativeButton={isNative}
       {...props}
     />
   )
