@@ -94,11 +94,18 @@ export function ProductCard({
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-3">
-        {product.brandId?.name && (
-          <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-            {product.brandId.name}
-          </p>
-        )}
+        {/*
+          * Always rendered, even with no brand.
+          *
+          * Dropping the line makes an unbranded card shorter than the one
+          * beside it, which is untidy in any grid and actively breaks the
+          * virtualised one on `/shop`: `VirtuosoGrid` measures a single item
+          * and extrapolates every row from it, so uneven heights accumulate
+          * into a wrong total and the scroll position jumps.
+          */}
+        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          {product.brandId?.name || " "}
+        </p>
 
         {/*
           * The stretched link.
@@ -113,7 +120,9 @@ export function ProductCard({
           * button, both of which sit at `z-20` and stay independently
           * clickable.
           */}
-        <h3 className="line-clamp-2 text-sm leading-snug font-medium transition-colors group-hover:text-brand">
+        {/* `min-h-[2lh]` reserves both lines whether or not the name needs
+            them, for the same reason the brand line above is unconditional. */}
+        <h3 className="line-clamp-2 min-h-[2lh] text-sm leading-snug font-medium transition-colors group-hover:text-brand">
           <Link
             href={`/shop/${product.slug}`}
             className="after:absolute after:inset-0 after:z-10 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -122,12 +131,14 @@ export function ProductCard({
           </Link>
         </h3>
 
-        <div className="mt-auto flex flex-wrap items-baseline gap-x-2 gap-y-0.5 pt-1">
-          <span className="text-base font-bold text-price">
+        {/* `nowrap`: a price that wrapped onto a second line would vary the
+            card height again. The struck-through original truncates instead. */}
+        <div className="mt-auto flex min-w-0 items-baseline gap-x-2 pt-1">
+          <span className="shrink-0 text-base font-bold text-price">
             {formatPriceRange(pricing.min, pricing.max, currency)}
           </span>
           {onSale && (
-            <span className="text-xs text-muted-foreground line-through">
+            <span className="truncate text-xs text-muted-foreground line-through">
               {formatPrice(originalPrice, currency)}
             </span>
           )}

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { GuestCartMerge } from "@/components/cart/guest-cart-merge";
+import { ChromeGate } from "@/components/layout/chrome-gate";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -10,6 +11,10 @@ import { WhatsAppFab } from "@/components/layout/whatsapp-fab";
 /**
  * The shop chrome: top bar, header, footer, the fixed tab bar below 1024px,
  * and the floating WhatsApp button.
+ *
+ * Some of it is route-dependent - the catalogue page runs without the top bar,
+ * the sticky header and the WhatsApp button, all of which compete with its own
+ * sidebar and scroll controls.
  *
  * A route group rather than a path segment, so these pages keep their URLs
  * (`/`, `/shop`, `/cart`) while auth and checkout screens can sit in a sibling
@@ -29,7 +34,10 @@ export default function StorefrontLayout({
         Skip to content
       </a>
 
-      <TopBar />
+      {/* The shop drops both: see `lib/layout/chrome`. */}
+      <ChromeGate>
+        <TopBar />
+      </ChromeGate>
       <SiteHeader />
 
       <main id="main" className="flex-1">
@@ -38,7 +46,9 @@ export default function StorefrontLayout({
 
       <SiteFooter />
       <MobileTabBar />
-      <WhatsAppFab />
+      <ChromeGate>
+        <WhatsAppFab />
+      </ChromeGate>
 
       {/* Renders nothing; moves a guest cart onto the account at sign-in. */}
       <GuestCartMerge />

@@ -53,16 +53,24 @@ function Button({
    * Base UI assumes it is rendering a real `<button>` and warns loudly when a
    * `render` prop swaps in something else - which, for a styled link, is most
    * of the time. Rather than every call site remembering `nativeButton={false}`
-   * alongside `render={<Link/>}`, infer it: an explicit prop always wins, a
-   * `render` element that is not a `<button>` turns it off, and everything
-   * else keeps the native default.
+   * alongside `render={<Link/>}`, infer it.
    *
-   * A function `render` cannot be inspected, so it is left alone and the
-   * caller can still pass the prop by hand.
+   * With no `render`, the answer is not a guess: this renders Base UI's own
+   * default element, which *is* a `<button>`. An inherited `nativeButton` is
+   * ignored in that case, and deliberately so - a Base UI parent that renders
+   * through a wrapper component (`ComboboxClear` -> `InputGroupButton` ->
+   * here) sees a custom component, concludes the element is not native, and
+   * forwards `false` down a chain that still bottoms out in a real button.
+   * Honouring it produced the inverse warning on every combobox.
+   *
+   * With a `render`, an explicit prop wins, an element that is not a
+   * `<button>` turns it off, and a function cannot be inspected so it keeps
+   * the native default and the caller can still say otherwise.
    */
-  const isNative =
-    nativeButton ??
-    (React.isValidElement(render) ? render.type === "button" : true)
+  const isNative = render
+    ? (nativeButton ??
+      (React.isValidElement(render) ? render.type === "button" : true))
+    : true
 
   return (
     <ButtonPrimitive

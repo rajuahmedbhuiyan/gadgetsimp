@@ -359,3 +359,90 @@ export function getLatestProducts(limit = 20) {
     pagination: { page: 0, limit },
   });
 }
+
+/* ------------------------------ shop filters ----------------------------- */
+
+/** How a filter group should be drawn. The category's config decides. */
+export type FilterType = "checkbox" | "select" | "range" | "color";
+
+export interface FilterOption {
+  value: string;
+  label: string;
+  /** Products in this category carrying the value. Not narrowed by other filters. */
+  count: number;
+}
+
+export interface FilterGroup {
+  id: string;
+  /** The attribute key to send back under `filters`. */
+  key: string;
+  label: string;
+  type: FilterType;
+  options: FilterOption[];
+  /** Present on `range`: the span the data actually covers. */
+  range?: { min: number; max: number };
+  /** Present on `range`: the widest the attribute is allowed to go. */
+  limits?: { min: number; max: number };
+}
+
+/**
+ * The sidebar for one category.
+ *
+ * A GET, and the only catalog read here that is: the options for a category
+ * are the same for every shopper and change only when the catalog does, so
+ * this is cacheable by the browser and by anything in front of it. Attribute
+ * filters are category-scoped by design, which is why there is no
+ * all-categories variant - without a category there is nothing to resolve the
+ * keys against.
+ */
+export async function getFilterOptions(
+  categorySlug: string,
+): Promise<FilterGroup[]> {
+  try {
+    const response = await fetch(
+      `${BASE}/shop/filter-options/${encodeURIComponent(categorySlug)}`,
+      { cache: "no-store" },
+    );
+
+    const payload = (await response
+      .json()
+      .catch(() => null)) as ApiEnvelope<FilterGroup[]> | null;
+
+    if (!response.ok || !payload?.success) {
+      console.error(
+        `[shop] filter-options/${categorySlug} -> ${
+          payload?.statusCode ?? response.status
+        }`,
+      );
+      return [];
+    }
+
+    return payload.data ?? [];
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error(`[shop] filter-options/${categorySlug} unreachable`, error);
+    return [];
+  }
+}
+
+export interface Brand {
+  id: string;
+  name: string;
+  slug: string;
+  logo?: Media | null;
+}
+
+/**
+ * Every brand, for the sidebar.
+ *
+ * Not scoped to the current category: the endpoint has no such filter, so a
+ * brand with nothing in the selected category still appears. That is a real
+ * limitation rather than an oversight - see the note in `filter-sidebar`.
+ */
+export async function getBrands(limit = 100): Promise<Brand[]> {
+  const payload = await shopFetch<{ brands: Brand[] }>("/brands/filter", {
+    pagination: { page: 0, limit },
+  });
+
+  return payload?.data?.brands ?? [];
+}
