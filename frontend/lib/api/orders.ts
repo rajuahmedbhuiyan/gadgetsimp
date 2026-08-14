@@ -11,15 +11,29 @@ import { api } from "./client";
 
 /* --------------------------------- types -------------------------------- */
 
+/**
+ * The six the API actually uses.
+ *
+ * The happy path is PENDING -> CONFIRMED -> OUT_FOR_DELIVERY -> DELIVERED.
+ * RETURNED and CANCELED are terminal: an order that ended has ended, and
+ * re-opening it would silently re-reserve stock that was already released.
+ */
 export type OrderStatus =
   | "PENDING"
   | "CONFIRMED"
-  | "PROCESSING"
-  | "SHIPPED"
+  | "OUT_FOR_DELIVERY"
   | "DELIVERED"
-  | "CANCELED"
   | "RETURNED"
+  | "CANCELED"
   | (string & {});
+
+export interface OrderStatusEvent {
+  status: OrderStatus;
+  note: string | null;
+  /** The staff account that made the change; `null` for automatic transitions. */
+  changedBy: string | null;
+  changedAt: string;
+}
 
 export interface ShippingAddress {
   line1: string;
@@ -77,6 +91,8 @@ export interface Order {
   shippingAddress: ShippingAddress;
   note: string | null;
   isGuestOrder: boolean;
+  /** Oldest first. What the tracker timestamps each step from. */
+  statusHistory: OrderStatusEvent[];
   placedAt: string;
   createdAt: string;
 }
@@ -96,6 +112,14 @@ export interface PlaceOrderInput {
   createAccount?: boolean;
   email?: string;
   idempotencyKey?: string;
+}
+
+export interface OrdersQuery {
+  status?: OrderStatus | OrderStatus[];
+  placedFrom?: string;
+  placedTo?: string;
+  sort?: { field?: "placedAt" | "total" | "status"; direction?: "asc" | "desc" };
+  pagination?: { page?: number; limit?: number };
 }
 
 export interface PlaceOrderResult {
@@ -118,7 +142,26 @@ export const ordersApi = {
     return api<PlaceOrderResult>("/orders", { method: "POST", body: input });
   },
 
-  /** Signed-in only - a guest cannot re-read their own order. */
+  /**
+   * The signed-in customer's own orders.
+   *
+   * There is no `userId` field - the owner comes from the token, so this can
+   * only ever return your own.
+   */
+  filter(query: OrdersQuery = {}) {
+    return api<{ orders: Order[] }>("/orders/filter", {
+      method: "POST",
+      body: query,
+    });
+  },
+
+  /**
+   * One order, by its **integer** id - not the six-digit `orderNumber` the
+   * customer quotes.
+   *
+   * Signed-in only, and someone else's order answers 404 rather than 403:
+   * ids are sequential, and "exists but is not yours" is itself information.
+   */
   get(id: number) {
     return api<{ order: Order }>(`/orders/${id}`);
   },
