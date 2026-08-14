@@ -45,6 +45,7 @@ import {
 import {
   AUTH_BUTTON,
   AuthInput,
+  normaliseMobile,
   PhoneField,
 } from "@/components/auth/controls";
 import { FormAlert } from "@/components/auth/form-alert";
@@ -134,8 +135,15 @@ export function CheckoutForm({
 
     if (user.fullName) setValue("fullName", user.fullName);
     if (user.phone) {
-      // Stored as `+8801…`; the control holds the local 11 digits only.
-      const local = user.phone.replace(/\D/g, "").replace(/^880/, "");
+      /*
+       * Stored as `+8801…`; the control holds the local 11 digits only.
+       *
+       * Through `normaliseMobile` rather than a local strip, because the
+       * country code here is `88` and the number keeps its own leading zero -
+       * taking `880` off `8801602817341` leaves `1602817341`, which is ten
+       * digits, fails the test below, and silently prefills nothing.
+       */
+      const local = normaliseMobile(user.phone);
       if (/^01\d{9}$/.test(local)) setValue("phone", local);
     }
   }, [user, setValue]);

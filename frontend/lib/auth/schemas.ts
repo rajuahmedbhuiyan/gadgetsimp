@@ -76,6 +76,21 @@ export const registerSchema = z
 
 export const emailOnlySchema = z.object({ email: emailSchema });
 
+/**
+ * Editing your own details.
+ *
+ * Only the two fields `PATCH /users/me` accepts from a form - `image` is set
+ * by the uploader, not typed, and there is deliberately no `email`: the API
+ * has no way to change one, since the address is what proves the account.
+ *
+ * `phone` reuses the registration field, so an empty control becomes
+ * `undefined` rather than `""` and is dropped from the patch entirely.
+ */
+export const profileSchema = z.object({
+  fullName: fullNameSchema,
+  phone: bdMobileSchema,
+});
+
 export const setPasswordSchema = z
   .object({
     password: passwordSchema,
@@ -124,6 +139,9 @@ export type RegisterData = z.output<typeof registerSchema>;
 
 export type EmailOnlyValues = z.input<typeof emailOnlySchema>;
 export type EmailOnlyData = z.output<typeof emailOnlySchema>;
+
+export type ProfileValues = z.input<typeof profileSchema>;
+export type ProfileData = z.output<typeof profileSchema>;
 
 export type SetPasswordValues = z.input<typeof setPasswordSchema>;
 export type SetPasswordData = z.output<typeof setPasswordSchema>;

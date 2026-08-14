@@ -27,7 +27,7 @@ import {
 } from "@/lib/orders/status";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SignedOutPrompt } from "./signed-out-prompt";
+import { SignedOutPrompt } from "@/components/auth/signed-out-prompt";
 
 const FILTERS: { value: OrderStatus | "ALL"; label: string }[] = [
   { value: "ALL", label: "All" },

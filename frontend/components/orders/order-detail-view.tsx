@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CopyButton } from "@/components/checkout/copy-button";
 import { OrderTracker } from "./order-tracker";
-import { SignedOutPrompt } from "./signed-out-prompt";
+import { SignedOutPrompt } from "@/components/auth/signed-out-prompt";
 
 export function OrderDetailView({ id }: { id: number }) {
   const { order, isLoading, isAuthenticated } = useOrder(id);

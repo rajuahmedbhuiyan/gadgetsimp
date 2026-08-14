@@ -215,6 +215,16 @@ export async function api<T>(
   const accessToken = readAccessToken();
   let response: Response;
 
+  /*
+   * A file upload goes out as multipart, which means two departures from the
+   * JSON path: the body is passed through untouched, and `Content-Type` is
+   * left off entirely so the browser can set it *with* the boundary parameter
+   * it generates. Setting it by hand produces a header with no boundary, and
+   * multer answers 500 on a body it cannot split.
+   */
+  const isMultipart =
+    typeof FormData !== "undefined" && body instanceof FormData;
+
   try {
     response = await fetch(`${BASE}${path}`, {
       method,
@@ -223,11 +233,18 @@ export async function api<T>(
       credentials: "include",
       signal,
       headers: {
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(body !== undefined && !isMultipart
+          ? { "Content-Type": "application/json" }
+          : {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...headers,
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body:
+        body === undefined
+          ? undefined
+          : isMultipart
+            ? (body as FormData)
+            : JSON.stringify(body),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;

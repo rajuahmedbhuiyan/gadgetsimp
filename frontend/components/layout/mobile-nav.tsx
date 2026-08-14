@@ -15,7 +15,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogIn, Menu, Package, Phone, User } from "lucide-react";
+import { Heart, LogIn, Menu, Package, Phone, User } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { contact, mainNav } from "@/lib/config/site";
@@ -144,6 +144,9 @@ export function MobileNav() {
               </DrawerLink>
               <DrawerLink href="/orders" icon={Package}>
                 My orders
+              </DrawerLink>
+              <DrawerLink href="/wishlist" icon={Heart}>
+                Wishlist
               </DrawerLink>
             </>
           ) : (

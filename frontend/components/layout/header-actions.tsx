@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCartCount } from "@/hooks/use-cart-count";
 import type { User } from "@/lib/api/types";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/auth/user-avatar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   HoverCard,
@@ -193,51 +193,6 @@ function AccountMenu({ user }: { user: User }) {
       </HoverCardContent>
     </HoverCard>
   );
-}
-
-function UserAvatar({ user, className }: { user: User; className?: string }) {
-  
-  return (
-    <Avatar className={cn("shrink-0", className)}>
-      {/* `image` is null for an email signup; social accounts carry one.
-       *
-       * `referrerPolicy="no-referrer"` is what makes Google and Facebook
-       * avatars actually load. Both CDNs answer 403 to a request carrying a
-       * `Referer` from an origin they do not recognise, the <img> fires
-       * `error`, and Base UI falls through to the initials - which looks
-       * exactly like "no image was set". Sending no referrer at all avoids
-       * the check. */}
-      {user.image ? (
-        <AvatarImage
-          src={user.image}
-          alt=""
-          referrerPolicy="no-referrer"
-          onLoadingStatusChange={(status) => {
-            // A failed load is indistinguishable from "no image set" once the
-            // fallback renders, so say so rather than letting it look like the
-            // account simply has no picture.
-            if (status === "error" && process.env.NODE_ENV !== "production") {
-              console.warn(
-                `[avatar] "${user.image}" failed to load - falling back to initials.`,
-              );
-            }
-          }}
-        />
-      ) : null}
-      <AvatarFallback className="bg-brand/15 font-semibold text-brand-foreground dark:text-brand">
-        {initials(user.fullName)}
-      </AvatarFallback>
-    </Avatar>
-  );
-}
-
-/** `Rahim Uddin` -> `RU`. One letter is fine; a single word is a valid name. */
-function initials(fullName: string) {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  const first = parts[0]?.[0] ?? "";
-  const last = parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "";
-  return (first + last).toUpperCase();
 }
 
 function MenuLink({

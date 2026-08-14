@@ -81,8 +81,29 @@ export function PasswordField({
  * together before the request goes out.
  *
  * Non-digits are stripped as they are typed - pasting `+880 1602-817341` from
- * a contact card should not be a validation error.
+ * a contact card should not be a validation error. Nor should the country code
+ * that comes with it: see `normaliseMobile`.
  */
+/**
+ * Whatever was typed or pasted -> the local 11 digits, or as close as it gets.
+ *
+ * The country code is the case worth handling. `+880 1602-817341` strips down
+ * to `8801602817341`, and truncating that to 11 keeps `88016028173` - a number
+ * that is the wrong length, fails the schema, and looks to the shopper like
+ * their own number was rejected. Dropping a leading `88` fixes it, and is
+ * unambiguous here: every Bangladeshi mobile begins `01`, so no valid local
+ * number starts with those digits.
+ *
+ * It also lands both ways of writing the international form on the same
+ * result, since `880` + `1602817341` and `88` + `01602817341` are the same
+ * thirteen digits.
+ */
+export function normaliseMobile(raw: string) {
+  const digits = raw.replace(/\D/g, "");
+  const local = digits.startsWith("880") ? digits.slice(2) : digits;
+  return local.slice(0, 11);
+}
+
 export function PhoneField({
   className,
   onChange,
@@ -104,17 +125,22 @@ export function PhoneField({
       <Input
         type="tel"
         inputMode="numeric"
-        autoComplete="tel-national"
-        maxLength={11}
-        placeholder="01602817341"
+        /*
+         * Deliberately not 11. The browser applies `maxLength` to the pasted
+         * text *before* any handler runs, so an 11-cap turns
+         * `+880 1602-817341` into `+880 1602-8` and the digits behind the
+         * formatting are gone before `normaliseMobile` can rescue them. This
+         * is a paste allowance only - the handler still truncates the value
+         * to 11 digits on every input event, so the field never holds more.
+         */
+        maxLength={24}
+        placeholder="01*********"
         // Clears the prefix with a gap after it, so `+88` and the typed digits
         // do not run together.
         className={cn(CONTROL, "pl-14", className)}
         {...props}
         onChange={(event) => {
-          event.target.value = event.target.value
-            .replace(/\D/g, "")
-            .slice(0, 11);
+          event.target.value = normaliseMobile(event.target.value);
           onChange?.(event);
         }}
       />
