@@ -4,6 +4,9 @@
  * `showInHome: true` is the curated set. The API additionally hides any
  * category with nothing to sell across its whole subtree, so a tile here
  * always leads to a populated grid - no client-side filtering needed.
+ *
+ * Tiles link to `/shop?category=<slug>`, not `/shop/<slug>`: that path is the
+ * product route, and a category slug 404s against it.
  */
 
 import Image from "next/image";
@@ -34,7 +37,7 @@ export async function CategoryGrid() {
           {items.map((category) => (
             <li key={category.id}>
               <Link
-                href={`/shop/${category.slug}`}
+                href={`/shop?category=${category.slug}`}
                 className="group flex h-full flex-col items-center gap-3 rounded-xl border bg-card p-4 text-center transition-all duration-300 hover:-translate-y-1 hover:border-brand/40 hover:shadow-card-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 <span className="relative flex size-16 items-center justify-center overflow-hidden rounded-full bg-muted/60 transition-colors group-hover:bg-brand/10 lg:size-20">

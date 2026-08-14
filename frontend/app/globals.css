@@ -327,6 +327,96 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Rich text
+ *
+ * Product descriptions arrive from the admin as HTML, so the markup is whatever
+ * the editor produced and cannot carry classes. These rules give those bare
+ * tags the same rhythm and colour as the rest of the app.
+ *
+ * Written here rather than pulling in `@tailwindcss/typography`: that plugin
+ * ships a whole prose system with its own colour scale to override, and this
+ * needs eleven selectors.
+ * ------------------------------------------------------------------------- */
+@layer components {
+  .rich-text {
+    @apply text-sm leading-relaxed text-muted-foreground;
+  }
+
+  .rich-text > * + * {
+    @apply mt-4;
+  }
+
+  .rich-text h1,
+  .rich-text h2,
+  .rich-text h3,
+  .rich-text h4 {
+    @apply mt-6 mb-2 font-heading font-semibold text-foreground;
+  }
+
+  .rich-text h1 {
+    @apply text-lg;
+  }
+  .rich-text h2 {
+    @apply text-base;
+  }
+  .rich-text h3,
+  .rich-text h4 {
+    @apply text-sm;
+  }
+
+  .rich-text strong,
+  .rich-text b {
+    @apply font-semibold text-foreground;
+  }
+
+  .rich-text a {
+    @apply font-medium text-brand-foreground underline underline-offset-4 dark:text-brand;
+  }
+
+  .rich-text ul,
+  .rich-text ol {
+    @apply flex flex-col gap-1.5 pl-5;
+  }
+
+  .rich-text ul {
+    @apply list-disc;
+  }
+  .rich-text ol {
+    @apply list-decimal;
+  }
+
+  .rich-text li::marker {
+    @apply text-brand;
+  }
+
+  .rich-text blockquote {
+    @apply border-l-2 border-brand/40 pl-4 italic;
+  }
+
+  .rich-text code {
+    @apply rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground;
+  }
+
+  .rich-text img {
+    @apply h-auto max-w-full rounded-lg;
+  }
+
+  /* A pasted table is the one thing that reliably overflows a phone. */
+  .rich-text table {
+    @apply block w-full overflow-x-auto border-collapse text-left;
+  }
+
+  .rich-text th,
+  .rich-text td {
+    @apply border-b px-3 py-2;
+  }
+
+  .rich-text th {
+    @apply font-semibold text-foreground;
+  }
+}
+
 @utility scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;

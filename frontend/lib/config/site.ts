@@ -61,6 +61,19 @@ export const contact = {
   freeDeliveryFrom: 3000,
 } as const;
 
+/**
+ * A WhatsApp link that opens the chat with a message already typed.
+ *
+ * `wa.me` takes the body as a `?text=` query parameter and the app drops it
+ * into the composer without sending, so the shopper still reviews it. Newlines
+ * survive encoding, which is what lets an order read as a list rather than a
+ * paragraph.
+ */
+export function whatsappLink(message?: string) {
+  if (!message) return contact.whatsappHref;
+  return `${contact.whatsappHref}?text=${encodeURIComponent(message)}`;
+}
+
 export const siteConfig = {
   name: process.env.NEXT_PUBLIC_APP_NAME ?? "GadgetSimp",
   description:
@@ -108,8 +121,9 @@ export const heroSlides: HeroSlide[] = [
     highlight: "grabbing",
     description:
       "Earbuds, cases, chargers and cables bundled together — one order, one delivery, and less than buying each on its own.",
-    // Points at the `combo` category rather than the shop root.
-    cta: { label: "Shop combos", href: "/shop/combo" },
+    // Filters the listing by the `combo` category. Category slugs are not
+    // products, so they cannot use the `/shop/<slug>` product route.
+    cta: { label: "Shop combos", href: "/shop?category=combo" },
     tone: "violet",
   },
   {
@@ -177,12 +191,12 @@ export const mainNav: readonly NavSection[] = [
     label: "Categories",
     href: "/categories",
     children: [
-      { label: "Earbuds & headphones", href: "/shop/earbuds-headphones" },
-      { label: "Smart watches", href: "/shop/smart-watches" },
-      { label: "Power banks", href: "/shop/power-banks" },
-      { label: "Chargers", href: "/shop/chargers" },
-      { label: "Phone cases", href: "/shop/phone-cases" },
-      { label: "Microphones", href: "/shop/microphones" },
+      { label: "Earbuds & headphones", href: "/shop?category=earbuds-headphones" },
+      { label: "Smart watches", href: "/shop?category=smart-watches" },
+      { label: "Power banks", href: "/shop?category=power-banks" },
+      { label: "Chargers", href: "/shop?category=chargers" },
+      { label: "Phone cases", href: "/shop?category=phone-cases" },
+      { label: "Microphones", href: "/shop?category=microphones" },
     ],
   },
   { label: "Deals", href: "/shop?onSale=true" },

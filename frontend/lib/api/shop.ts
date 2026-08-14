@@ -72,6 +72,91 @@ export interface ShopCategory {
   sortOrder: number;
 }
 
+/* ----------------------------- product detail ---------------------------- */
+
+export interface CategoryRef {
+  id: string;
+  name: string;
+  slug: string;
+  /** Root-to-leaf trail, which is what the breadcrumb walks. */
+  path?: { id: string; name: string; slug: string }[];
+}
+
+export interface BrandDetail extends BrandRef {
+  logo?: string | null;
+}
+
+export interface StockInfo {
+  quantity: number;
+  trackInventory: boolean;
+  allowBackorder: boolean;
+  /** At or under this, the UI says how few are left. */
+  lowStockThreshold: number;
+  status: "IN_STOCK" | "OUT_OF_STOCK" | (string & {});
+}
+
+/**
+ * One titled block of the spec table. `options` values may be a scalar or a
+ * list - `compatibility: ["android", "usb-c"]` alongside `battery_life: 24`.
+ */
+export interface AttributeGroup {
+  title: string;
+  options: Record<string, string | number | boolean | (string | number)[]>;
+}
+
+/** One buyable SKU of a VARIABLE product. */
+export interface Variation {
+  id: string;
+  productId: string;
+  sku: string;
+  /** Keyed by `variantOptionKeys`, e.g. `{ color: "black" }`. */
+  options: Record<string, string>;
+  sellingPrice: number;
+  originalPrice?: number;
+  stock: StockInfo;
+  status: string;
+  image?: Media | null;
+  sortOrder: number;
+}
+
+export interface ProductDetail {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  shortDescription?: string;
+  categoryIds: CategoryRef[];
+  brandId?: BrandDetail | null;
+  productType: ProductType;
+  sku: string;
+  status: string;
+  featured: boolean;
+  tags: string[];
+  attributes: AttributeGroup[];
+  /** Which option axes a VARIABLE product varies on, in display order. */
+  variantOptionKeys: string[];
+  currency: string;
+  sellingPrice: number;
+  originalPrice?: number;
+  stock: StockInfo;
+  shipping?: {
+    requiresShipping: boolean;
+    freeShipping: boolean;
+    weight?: { value: number; unit: string };
+    dimensions?: {
+      length: number;
+      width: number;
+      height: number;
+      unit: string;
+    };
+  };
+  thumbnail?: Media | null;
+  images: Media[];
+  seo?: { title?: string; description?: string; keywords?: string[] };
+  /** Empty for a SIMPLE product. */
+  variations: Variation[];
+}
+
 export type ShopSortField = "relevance" | "price" | "name" | "createdAt";
 
 export interface ShopQuery {
@@ -152,6 +237,49 @@ async function shopFetch<T>(
   }
 }
 
+/**
+ * One product, by slug.
+ *
+ * A GET, unlike the rest of this module - and the only call here that
+ * distinguishes "missing" from "broken". `null` means the slug is not a
+ * product, which the page turns into a 404; a network failure still throws
+ * through `shopFetch`'s own logging path and renders the error boundary,
+ * because a product page with no product is not a page.
+ */
+export async function getProduct(slug: string): Promise<ProductDetail | null> {
+  try {
+    const response = await fetch(
+      `${BASE}/shop/${encodeURIComponent(slug)}`,
+      {
+        // Price and stock decide whether this page can be acted on.
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      },
+    );
+
+    if (response.status === 404) return null;
+
+    const payload = (await response
+      .json()
+      .catch(() => null)) as ApiEnvelope<{ product: ProductDetail }> | null;
+
+    if (!response.ok || !payload?.success) {
+      console.error(
+        `[shop] /shop/${slug} -> ${payload?.statusCode ?? response.status} ${
+          payload?.message ?? response.statusText
+        }`,
+      );
+      return null;
+    }
+
+    return payload.data?.product ?? null;
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error(`[shop] /shop/${slug} unreachable`, error);
+    return null;
+  }
+}
+
 /** Browse the catalog. Every field is optional; the API defaults the rest. */
 export async function getProducts(query: ShopQuery): Promise<Paged<ProductCard>> {
   const payload = await shopFetch<{ products: ProductCard[] }>("/shop", query);
@@ -191,6 +319,37 @@ export function getHomeCategories(limit = 12) {
     showInHome: true,
     pagination: { page: 0, limit },
   });
+}
+
+/**
+ * Other products from the same category.
+ *
+ * Asks for more than it needs on two counts: the product being viewed sits in
+ * its own category and would otherwise take a slot in its own "related" row,
+ * and `skip` lets a second placement on the same page continue where the first
+ * left off instead of repeating it. The listing order is stable for identical
+ * filters, so paging by slice is sound here.
+ */
+export async function getRelatedProducts(
+  categorySlug: string | undefined,
+  excludeId: string,
+  limit = 10,
+  skip = 0,
+) {
+  if (!categorySlug) return { items: [], meta: null } as Paged<ProductCard>;
+
+  const { items, meta } = await getProducts({
+    categorySlugs: [categorySlug],
+    inStock: true,
+    pagination: { page: 0, limit: limit + skip + 1 },
+  });
+
+  return {
+    items: items
+      .filter((product) => product.id !== excludeId)
+      .slice(skip, skip + limit),
+    meta,
+  };
 }
 
 export function getLatestProducts(limit = 20) {

@@ -51,3 +51,26 @@ export function formatPriceRange(
     ? formatPrice(min, currency)
     : `${formatPrice(min, currency)} – ${formatPrice(max, currency)}`;
 }
+
+/**
+ * How much is off, as a whole percent.
+ *
+ * `POST /shop` sends `discountPercent` with each card, but `GET /shop/{slug}`
+ * does not - it sends the two prices and leaves the arithmetic to the caller.
+ * Rounding matches the server's so a card and its product page never disagree
+ * by a point.
+ */
+export function discountPercent(sellingPrice: number, originalPrice?: number) {
+  if (!originalPrice || originalPrice <= sellingPrice) return 0;
+  return Math.round((1 - sellingPrice / originalPrice) * 100);
+}
+
+/**
+ * `battery_life` -> `Battery life`, for spec keys the API stores as slugs.
+ * Values get the same treatment: `usb-c` -> `Usb c` reads better than the raw
+ * token in a table.
+ */
+export function humanise(value: string) {
+  const spaced = value.replace(/[_-]+/g, " ").trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
