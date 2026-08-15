@@ -87,10 +87,17 @@ export function useWishlist() {
       );
     },
 
-    // Reconcile against the server either way - the optimistic guess and the
-    // real answer can disagree if another tab changed the list.
+    /*
+     * Reconcile against the server either way - the optimistic guess and the
+     * real answer can disagree if another tab changed the list.
+     *
+     * The whole `["wishlist"]` tree, not just the ids: the saved-items listing
+     * lives under the same prefix, and unticking a heart on the wishlist page
+     * has to take the card with it rather than leaving an empty heart on a row
+     * that is no longer saved.
+     */
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: wishlistIdsKey });
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
     },
   });
 
