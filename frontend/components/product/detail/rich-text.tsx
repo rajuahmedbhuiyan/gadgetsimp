@@ -1,4 +1,4 @@
-import DOMPurify from "isomorphic-dompurify";
+import sanitizeHtml from "sanitize-html";
 
 import { cn } from "@/lib/utils";
 
@@ -13,8 +13,15 @@ import { cn } from "@/lib/utils";
  * needs and nothing more: no `<script>`, no `<iframe>`, no event handlers, no
  * `style`.
  *
- * A server component, so DOMPurify and its DOM shim stay out of the client
- * bundle entirely - the browser receives already-clean markup.
+ * A server component, so the sanitiser stays out of the client bundle entirely
+ * - the browser receives already-clean markup.
+ *
+ * `sanitize-html` and not `isomorphic-dompurify`: the latter pulls in jsdom,
+ * which is a browser in a box - 770 files and ~11.5MB traced into whatever
+ * route imports it. That weight is what left this route without a serverless
+ * function on Vercel while every other route deployed fine, so the page 500'd
+ * in production and worked everywhere else. This parses with htmlparser2
+ * instead, needs no DOM, and sanitises by the same allow-list.
  */
 
 const ALLOWED_TAGS = [
@@ -36,14 +43,23 @@ export function RichText({
   html: string;
   className?: string;
 }) {
-  const clean = DOMPurify.sanitize(html, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
+  const clean = sanitizeHtml(html, {
+    allowedTags: ALLOWED_TAGS,
+    // The allow-list is the same for every tag, so no tag can carry an
+    // attribute another one is denied.
+    allowedAttributes: { "*": ALLOWED_ATTR },
     // `javascript:` and `data:` hrefs are not links, whatever the tag says.
-    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|#|\/)/i,
-    // Strips the tag but keeps its text, so removing a `<script>` wrapper does
-    // not silently delete a paragraph with it.
-    KEEP_CONTENT: true,
+    allowedSchemes: ["http", "https", "mailto", "tel"],
+    allowedSchemesByTag: {},
+    allowedSchemesAppliedToAttributes: ["href", "src"],
+    // `//evil.com` inherits the page's scheme and reads as a relative path at a
+    // glance; a product description has no reason to use one.
+    allowProtocolRelative: false,
+    // A disallowed tag is unwrapped rather than deleted, so removing a
+    // `<section>` wrapper does not silently delete the paragraph inside it -
+    // except for `<script>`/`<style>`, where the content *is* the payload and
+    // goes with the tag (`nonTextTags`).
+    disallowedTagsMode: "discard",
   });
 
   if (!clean.trim()) return null;
