@@ -224,7 +224,7 @@ export function CheckoutForm({
               <AuthInput
                 id="fullName"
                 aria-required
-                placeholder="Rahim Uddin"
+                placeholder="e.g. Raju Ahmed"
                 autoComplete="name"
                 aria-invalid={Boolean(errors.fullName)}
                 {...register("fullName")}
@@ -261,7 +261,7 @@ export function CheckoutForm({
               <AuthInput
                 id="line1"
                 aria-required
-                placeholder="House 42, Road 3, Dhanmondi"
+                placeholder="e.g. House 42, Road 3, Dhanmondi"
                 autoComplete="address-line1"
                 aria-invalid={Boolean(errors.line1)}
                 {...register("line1")}
@@ -299,7 +299,7 @@ export function CheckoutForm({
                 <AuthInput
                   id="city"
                   aria-required
-                  placeholder="Dhaka"
+                  placeholder="e.g. Savar"
                   autoComplete="address-level2"
                   aria-invalid={Boolean(errors.city)}
                   {...register("city")}
@@ -339,7 +339,7 @@ export function CheckoutForm({
               <Textarea
                 id="note"
                 rows={3}
-                placeholder="Please call before delivery"
+                placeholder="e.g. Please call before delivery"
                 className="rounded-field"
                 {...register("note")}
               />

@@ -58,7 +58,7 @@ export const contact = {
   },
   location: "Dhaka, Bangladesh",
   /** Order value above which delivery is free, in the catalogue's currency. */
-  freeDeliveryFrom: 3000,
+  freeDeliveryFrom: 5000,
 } as const;
 
 /**
