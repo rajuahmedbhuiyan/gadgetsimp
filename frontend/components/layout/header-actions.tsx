@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Heart,
+  LayoutDashboard,
   LogOut,
   Package,
   ShoppingCart,
@@ -26,6 +27,8 @@ import {
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth/auth-context";
+import { isStaff, roleLabel } from "@/lib/auth/roles";
+import { PANEL_ROOT } from "@/lib/panel/access";
 import { useCartCount } from "@/hooks/use-cart-count";
 import type { User } from "@/lib/api/types";
 import { UserAvatar } from "@/components/auth/user-avatar";
@@ -165,6 +168,28 @@ function AccountMenu({ user }: { user: User }) {
             </p>
           </div>
         </div>
+
+        {/* Staff only, and in its own block above the shopper's own links: it
+            leaves the shop entirely, which is not what the three below do.
+            Hidden for a customer rather than disabled - there is nothing to
+            explain to someone who was never meant to see it. */}
+        {isStaff(user) && (
+          <div className="border-b p-1.5">
+            <Link
+              href={PANEL_ROOT}
+              onClick={close}
+              className="flex items-center gap-2.5 rounded-lg bg-brand/10 px-2.5 py-2 text-sm font-semibold text-brand-foreground transition-colors hover:bg-brand/20 dark:text-brand"
+            >
+              <LayoutDashboard className="size-4" aria-hidden />
+              Dashboard
+              {/* Says which door this is - a moderator and an owner see the
+                  same button and reach different panels behind it. */}
+              <span className="ml-auto text-[11px] font-medium text-muted-foreground">
+                {roleLabel(user.role)}
+              </span>
+            </Link>
+          </div>
+        )}
 
         <nav className="p-1.5">
           {/* Closing on click matters for a same-route tap, where there is no

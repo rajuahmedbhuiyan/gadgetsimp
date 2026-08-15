@@ -224,6 +224,7 @@ export function OrderSuccess({ confirmation }: { confirmation: Confirmation }) {
                     order.shippingAddress.line2,
                     order.shippingAddress.area,
                     order.shippingAddress.city,
+                    order.shippingAddress.district,
                     order.shippingAddress.postalCode,
                     order.shippingAddress.country,
                   ]

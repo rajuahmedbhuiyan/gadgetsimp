@@ -15,6 +15,7 @@ const {
 } = require("../product/purchasable");
 const {
   ORDER,
+  SHIPPING,
   ORDER_STATUS,
   PAYMENT_STATUS,
 } = require("../../shared/constants");
@@ -44,15 +45,40 @@ function money(value) {
 }
 
 /**
- * Delivery cost.
+ * Which delivery zone an address falls in.
  *
- * A function rather than a literal zero, because this is where a weight band,
- * a free-shipping threshold or a zone table will go, and the one thing that
- * must stay true is that the number is decided here and never accepted from a
- * client.
+ * `district` is the field the rate is written against, but it is optional at
+ * checkout while `city` is required - so a customer who typed only "Dhaka"
+ * as their city would otherwise be charged the outside-Dhaka rate for leaving
+ * an optional box empty. Falling back to `city` is safe in the direction that
+ * matters: every city called Dhaka is in the Dhaka district.
+ *
+ * Compared case- and whitespace-insensitively, because this is free text a
+ * human typed and "dhaka " is the same place as "Dhaka".
  */
-function shippingFeeFor() {
-  return 0;
+function isInsideDhaka(address = {}) {
+  const zone = address.district?.trim() || address.city?.trim() || "";
+
+  return zone.toLowerCase() === SHIPPING.DHAKA_ZONE;
+}
+
+/**
+ * Delivery cost: 70 inside Dhaka, 130 outside, and free once the order is
+ * worth SHIPPING.FREE_THRESHOLD or more.
+ *
+ * Decided here from the address and the server-computed subtotal, never read
+ * from the request - the validator has no `shippingFee` field at all, so a
+ * client that tries to name its own delivery charge gets a 422. The threshold
+ * is checked against the whole subtotal rather than a single line, so five
+ * items at 1,000 qualify exactly as one item at 5,000 does.
+ *
+ * @param {object} address The shipping address as validated.
+ * @param {number} subtotal Sum of the line totals, already rounded.
+ */
+function shippingFeeFor(address, subtotal) {
+  if (subtotal >= SHIPPING.FREE_THRESHOLD) return 0;
+
+  return isInsideDhaka(address) ? SHIPPING.INSIDE_DHAKA_FEE : SHIPPING.OUTSIDE_DHAKA_FEE;
 }
 
 /* ------------------------------ order number ------------------------------ */
@@ -262,8 +288,11 @@ function snapshotLine(line, reservation) {
   };
 }
 
-function totalsFor(snapshots) {
-  const subtotal = snapshots.reduce((sum, item) => sum + item.lineTotal, 0);
+function totalsFor(snapshots, address) {
+  // Rounded before anything reads it, so the free-shipping threshold is
+  // compared against the figure the customer is actually charged rather than
+  // a float that lands a hair under it.
+  const subtotal = money(snapshots.reduce((sum, item) => sum + item.lineTotal, 0));
 
   // Savings against the struck-through price. Reported, not deducted -
   // `unitPrice` is already the price being charged.
@@ -276,10 +305,10 @@ function totalsFor(snapshots) {
     0
   );
 
-  const shippingFee = shippingFeeFor();
+  const shippingFee = shippingFeeFor(address, subtotal);
 
   return {
-    subtotal: money(subtotal),
+    subtotal,
     discount: money(discount),
     shippingFee: money(shippingFee),
     total: money(subtotal + shippingFee),
@@ -419,7 +448,7 @@ async function placeOrder(input, { actor = null, client = {} } = {}) {
 
   try {
     const snapshots = lines.map((line, index) => snapshotLine(line, reservations[index]));
-    const totals = totalsFor(snapshots);
+    const totals = totalsFor(snapshots, input.shippingAddress);
 
     const order = await createWithUniqueNumber({
       userId: actor?.id ?? null,

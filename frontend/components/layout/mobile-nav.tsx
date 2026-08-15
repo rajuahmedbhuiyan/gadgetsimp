@@ -15,11 +15,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Heart, LogIn, Menu, Package, Phone, User } from "lucide-react";
+import {
+  Heart,
+  LayoutDashboard,
+  LogIn,
+  Menu,
+  Package,
+  Phone,
+  User,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { contact, mainNav } from "@/lib/config/site";
 import { useAuth } from "@/lib/auth/auth-context";
+import { isStaff, roleLabel } from "@/lib/auth/roles";
+import { PANEL_ROOT } from "@/lib/panel/access";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -139,6 +149,22 @@ export function MobileNav() {
         <div className="flex flex-col gap-1 px-2">
           {user ? (
             <>
+              {/* Staff first, and tinted: it is the one entry here that leaves
+                  the shop. The drawer closes itself on navigation, so the
+                  panel is never left behind an open sheet. */}
+              {isStaff(user) && (
+                <Link
+                  href={PANEL_ROOT}
+                  className="mb-1 flex items-center gap-3 rounded-md bg-brand/10 px-2 py-3 text-sm font-semibold text-brand-foreground dark:text-brand"
+                >
+                  <LayoutDashboard className="size-5" aria-hidden />
+                  Dashboard
+                  <span className="ml-auto text-xs font-medium text-muted-foreground">
+                    {roleLabel(user.role)}
+                  </span>
+                </Link>
+              )}
+
               <DrawerLink href="/account" icon={User}>
                 {user.fullName}
               </DrawerLink>

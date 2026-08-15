@@ -361,8 +361,28 @@ describe("correcting the delivery details", () => {
     }
 
     const stored = await Order.findById(order.id).lean();
-    expect(stored.total).toBe(2000);
+    // 2 x 1000, plus the 70 inside-Dhaka delivery charge.
+    expect(stored.total).toBe(2070);
     expect(stored.status).toBe("PENDING");
+  });
+
+  /**
+   * Placement prices delivery from the district, but a correction afterwards
+   * must not quietly change what the courier collects at the door - the total
+   * is what the customer agreed to.
+   */
+  it("does not reprice delivery when the district is corrected", async () => {
+    const { order } = await placeOrder();
+    expect(order.shippingFee).toBe(70);
+
+    const response = await mod.update(order.id, {
+      shippingAddress: { city: "Sylhet", district: "Sylhet" },
+    });
+
+    expect(response.body.data.order).toMatchObject({
+      shippingFee: 70,
+      total: 2070,
+    });
   });
 
   it("refuses to rewrite the record of a finished order", async () => {

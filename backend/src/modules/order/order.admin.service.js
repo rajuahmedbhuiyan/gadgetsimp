@@ -209,6 +209,13 @@ async function changeStatus(orderId, { status, note }, actor) {
  * Deliberately refuses to touch a finished order: a delivered order's address
  * is the historical record of where the goods actually went, and editing it
  * afterwards rewrites the evidence rather than fixing anything.
+ *
+ * **The delivery charge is not recalculated** when the district changes, even
+ * though placement derives it from the district. The total on an order is what
+ * the customer agreed to pay, and a moderator correcting a typo must not
+ * silently change the amount the courier will collect at the door. If a
+ * correction genuinely moves the order to another zone, that is a
+ * conversation with the customer, not a background repricing.
  */
 async function updateDetails(orderId, input, actor) {
   const order = await Order.findOne({ _id: orderId, deletedAt: null });

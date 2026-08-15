@@ -8,7 +8,9 @@ import {
   REFRESH_COOKIE,
   tokenExpiry,
 } from "@/lib/auth/tokens";
+import { hasRole } from "@/lib/auth/roles";
 import { encodeUserHeader, USER_HEADER } from "@/lib/auth/user-header";
+import { isPanelPath, requiredRoleFor } from "@/lib/panel/access";
 
 /**
  * The session, resolved on the server before anything renders.
@@ -198,6 +200,31 @@ function route(
   searchParams: URLSearchParams,
   user: User | null,
 ) {
+  // The control panel, turned away before a byte of it renders. An optimistic
+  // check in the sense the Next docs mean: the session was resolved above from
+  // the API, but the layout re-reads the same user and the API re-checks the
+  // role on every call it serves, so this is the cheap first gate rather than
+  // the only one.
+  if (isPanelPath(pathname)) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "";
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+
+    if (!hasRole(user, requiredRoleFor(pathname))) {
+      // Signed in, just not staff. Home rather than a 403 page: there is
+      // nothing here for them to be told about, and a shopper who mistyped a
+      // URL should land somewhere useful.
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (!user && matches(pathname, REQUIRES_SESSION)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

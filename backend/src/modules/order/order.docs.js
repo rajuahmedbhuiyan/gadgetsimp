@@ -24,7 +24,16 @@
  *         line2: { type: string, maxLength: 240, example: Flat B4 }
  *         area: { type: string, maxLength: 120, example: Dhanmondi }
  *         city: { type: string, maxLength: 120, example: Dhaka }
- *         district: { type: string, maxLength: 120, example: Dhaka }
+ *         district:
+ *           type: string
+ *           maxLength: 120
+ *           description: >
+ *             **Sets the delivery charge.** `Dhaka` is 70, anywhere else is
+ *             130, and both are waived once the subtotal reaches 5000. Still
+ *             optional - when it is omitted the zone is read from `city`
+ *             instead, so a customer who typed only "Dhaka" is charged the
+ *             inside-Dhaka rate. Matched case-insensitively.
+ *           example: Dhaka
  *         postalCode: { type: string, maxLength: 24, example: '1209' }
  *         country: { type: string, maxLength: 80, default: Bangladesh, example: Bangladesh }
  *
@@ -90,8 +99,15 @@
  *         currency: { type: string, example: BDT }
  *         subtotal: { type: number, description: Sum of line totals at the prices charged., example: 2598 }
  *         discount: { type: number, description: Savings against the struck-through prices. Reported, not deducted - unitPrice is already the price charged., example: 400 }
- *         shippingFee: { type: number, example: 0 }
- *         total: { type: number, description: subtotal + shippingFee., example: 2598 }
+ *         shippingFee:
+ *           type: number
+ *           description: >
+ *             Delivery charge, decided server-side from the shipping address
+ *             and the subtotal: 70 inside Dhaka, 130 elsewhere, 0 once the
+ *             subtotal reaches 5000. Frozen onto the order at placement - a
+ *             later address correction by staff does not reprice it.
+ *           example: 70
+ *         total: { type: number, description: subtotal + shippingFee., example: 2668 }
  *         itemCount: { type: integer, example: 2 }
  *         totalQuantity: { type: integer, example: 3 }
  *         items:
@@ -234,6 +250,14 @@
  *       written onto the order as a frozen record.
  *
  *
+ *       **Delivery charge**, likewise decided here and not accepted from the
+ *       client: **70** when the shipping address's `district` is Dhaka,
+ *       **130** anywhere else, and **free** once the subtotal reaches
+ *       **5000** - a threshold on the order's value, so five items at 1,000
+ *       qualify exactly as one item at 5,000 does. `district` is optional and
+ *       falls back to `city`, so "Dhaka" in either field gets the inside rate.
+ *
+ *
  *       **Stock is reserved as the order is placed**, atomically per line. If
  *       any line cannot be satisfied the whole order is refused with 422 and
  *       nothing is reserved - an order is a commitment, so a quantity that
@@ -274,6 +298,7 @@
  *               line1: House 42, Road 3, Dhanmondi
  *               area: Dhanmondi
  *               city: Dhaka
+ *               district: Dhaka
  *               postalCode: '1209'
  *               country: Bangladesh
  *             note: Please call before delivery

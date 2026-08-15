@@ -51,6 +51,13 @@ const note = z.string().trim().max(ORDER.MAX_NOTE_LENGTH).optional();
  * everything else is optional because addresses outside a dense city often
  * genuinely have no postcode or district, and demanding one just teaches
  * people to type "n/a".
+ *
+ * `district` decides the delivery charge (see `shippingFeeFor` in the
+ * service), and stays optional anyway: making it required to price an order
+ * would fail checkouts over a field many customers cannot fill in, so the
+ * service falls back to `city` and charges the outside-Dhaka rate when
+ * neither names a zone it knows. What it must never become is a price input -
+ * it names a place, and the server decides what delivering there costs.
  */
 const shippingAddress = z
   .object({

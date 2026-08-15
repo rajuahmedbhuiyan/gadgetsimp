@@ -396,6 +396,34 @@ const ORDER = Object.freeze({
 });
 
 /**
+ * Delivery charges, in the store's currency.
+ *
+ * Two zones and a threshold, which is how a Bangladeshi courier actually
+ * prices: inside Dhaka is a same-city hop, everywhere else goes on a bus.
+ * The zone is decided from the shipping address's `district` - falling back
+ * to `city`, because `district` is optional at checkout and a customer who
+ * only typed "Dhaka" as their city is unambiguously inside the Dhaka zone,
+ * and should not be charged the outside rate for skipping an optional field.
+ *
+ * `FREE_THRESHOLD` is compared against the **subtotal**, not any single
+ * line: it is the usual "free delivery over ৳5,000" offer on the order's
+ * value, so five items at 1,000 qualify exactly as one item at 5,000 does.
+ *
+ * These live here rather than in the database because they are a policy the
+ * business changes rarely and deliberately. When they need to be editable by
+ * staff, this object becomes the fallback for a settings document - and the
+ * one rule that must survive that move is that the fee is always decided
+ * server-side and never read from a request.
+ */
+const SHIPPING = Object.freeze({
+  INSIDE_DHAKA_FEE: 70,
+  OUTSIDE_DHAKA_FEE: 130,
+  FREE_THRESHOLD: 5000,
+  // Compared lowercased against the trimmed district (or city).
+  DHAKA_ZONE: "dhaka",
+});
+
+/**
  * How long someone has to choose a password after clicking the verification
  * link that a checkout sent them.
  *
@@ -468,6 +496,7 @@ module.exports = {
   CART_ISSUE_VALUES,
   WISHLIST,
   ORDER,
+  SHIPPING,
   ORDER_STATUS,
   ORDER_STATUS_VALUES,
   ORDER_STATUS_FLOW,

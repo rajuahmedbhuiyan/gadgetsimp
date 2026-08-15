@@ -45,7 +45,12 @@ export function SiteHeader({
             <MobileNav />
           </div>
 
-          <BrandLogo priority />
+          {/* The wordmark is 4.13:1, so height is what sets its width: 40px
+              tall is 165px wide, and under 350px the row cannot hold that
+              beside a 44px hamburger and two 44px action buttons. 28px tall
+              is 116px wide, which still fits a 320px screen. Only the header
+              copy shrinks - the drawer and the footer have the room. */}
+          <BrandLogo priority className="max-2xs:h-7" />
 
           <SearchBar className="mx-auto hidden max-w-xl lg:block" />
 

@@ -44,7 +44,16 @@ async function makeVariant(product, overrides = {}) {
 }
 
 const CONTACT = { name: "Rahim Uddin", phone: "+8801712345678" };
-const ADDRESS = { line1: "House 42, Road 3", area: "Dhanmondi", city: "Dhaka", postalCode: "1209" };
+// Inside Dhaka, so every total below carries the 70 delivery charge unless the
+// order is big enough to earn free delivery.
+const ADDRESS = {
+  line1: "House 42, Road 3",
+  area: "Dhanmondi",
+  city: "Dhaka",
+  district: "Dhaka",
+  postalCode: "1209",
+};
+const OUTSIDE_DHAKA = { ...ADDRESS, city: "Sylhet", district: "Sylhet" };
 
 function place(body, token) {
   const call = request(app).post(`${API}/orders`);
@@ -73,7 +82,9 @@ describe("placing an order", () => {
       paymentMethod: "CASH_ON_DELIVERY",
       paymentStatus: "DUE",
       isGuestOrder: true,
-      total: 2000,
+      subtotal: 2000,
+      shippingFee: 70,
+      total: 2070,
     });
   });
 
@@ -229,8 +240,8 @@ describe("price integrity", () => {
     expect(response.body.data.order).toMatchObject({
       subtotal: 2400,
       discount: 600,
-      shippingFee: 0,
-      total: 2400,
+      shippingFee: 70,
+      total: 2470,
       currency: "BDT",
     });
     expect(response.body.data.order.items[0]).toMatchObject({
@@ -249,7 +260,7 @@ describe("price integrity", () => {
       items: [{ productId: String(product._id), variantId: String(variant._id), quantity: 2 }],
     });
 
-    expect(response.body.data.order.total).toBe(2900);
+    expect(response.body.data.order.total).toBe(2970);
     expect(response.body.data.order.items[0]).toMatchObject({
       unitPrice: 1450,
       variantLabel: "black / m",
@@ -265,7 +276,7 @@ describe("price integrity", () => {
 
     const stored = await Order.findById(placed.body.data.order.id).lean();
     expect(stored.items[0].unitPrice).toBe(1000);
-    expect(stored.total).toBe(1000);
+    expect(stored.total).toBe(1070);
   });
 
   it("requires a variant for a variable product", async () => {
@@ -288,6 +299,85 @@ describe("price integrity", () => {
 
     expect(response.status).toBe(422);
     expect(response.body.code).toBe("ORDER_ITEMS_INVALID");
+  });
+});
+
+describe("the delivery charge", () => {
+  /** Places a one-product order of `quantity` at `sellingPrice` to `address`. */
+  async function charge({ sellingPrice = 1000, quantity = 1, address = ADDRESS }) {
+    const product = await makeProduct({ sellingPrice });
+
+    const response = await request(app)
+      .post(`${API}/orders`)
+      .send({
+        contact: CONTACT,
+        shippingAddress: address,
+        items: [{ productId: String(product._id), quantity }],
+      });
+
+    expect(response.status).toBe(201);
+
+    return response.body.data.order;
+  }
+
+  it("charges 70 inside Dhaka and 130 everywhere else", async () => {
+    const inside = await charge({ address: ADDRESS });
+    const outside = await charge({ address: OUTSIDE_DHAKA });
+
+    expect(inside).toMatchObject({ subtotal: 1000, shippingFee: 70, total: 1070 });
+    expect(outside).toMatchObject({ subtotal: 1000, shippingFee: 130, total: 1130 });
+  });
+
+  it("reads the district however it was typed", async () => {
+    for (const district of ["dhaka", "DHAKA", " Dhaka "]) {
+      const order = await charge({ address: { ...ADDRESS, district } });
+      expect({ district, fee: order.shippingFee }).toEqual({ district, fee: 70 });
+    }
+  });
+
+  /**
+   * `district` is optional, and a customer who filled in only the required
+   * `city` must not pay the outside rate for skipping a box.
+   */
+  it("falls back to the city when no district was given", async () => {
+    const { district: _omitted, ...cityOnly } = ADDRESS;
+
+    expect((await charge({ address: cityOnly })).shippingFee).toBe(70);
+    expect((await charge({ address: { ...cityOnly, city: "Khulna" } })).shippingFee).toBe(130);
+  });
+
+  it("delivers free from 5000 up, in either zone", async () => {
+    const inside = await charge({ sellingPrice: 5000, address: ADDRESS });
+    const outside = await charge({ sellingPrice: 6500, address: OUTSIDE_DHAKA });
+
+    expect(inside).toMatchObject({ subtotal: 5000, shippingFee: 0, total: 5000 });
+    expect(outside).toMatchObject({ subtotal: 6500, shippingFee: 0, total: 6500 });
+  });
+
+  it("still charges just under the threshold", async () => {
+    const order = await charge({ sellingPrice: 4999, address: ADDRESS });
+
+    expect(order).toMatchObject({ shippingFee: 70, total: 5069 });
+  });
+
+  /**
+   * The threshold is on what the order is worth, not on what one line is
+   * worth - five items at 1,000 is the same 5,000 to the business as one item
+   * at 5,000, and a customer who reached it by filling their basket would not
+   * accept being told otherwise.
+   */
+  it("counts the whole order towards the threshold, not one line", async () => {
+    const order = await charge({ sellingPrice: 1000, quantity: 5, address: OUTSIDE_DHAKA });
+
+    expect(order).toMatchObject({ subtotal: 5000, shippingFee: 0, total: 5000 });
+  });
+
+  it("freezes the charge onto the order rather than recomputing it on read", async () => {
+    const placed = await charge({ address: ADDRESS });
+
+    const stored = await Order.findById(placed.id).lean();
+    expect(stored.shippingFee).toBe(70);
+    expect(stored.total).toBe(1070);
   });
 });
 
