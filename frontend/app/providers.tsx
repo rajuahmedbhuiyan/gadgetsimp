@@ -1,10 +1,12 @@
 "use client";
 
+import { Suspense } from "react";
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { ThemeProvider } from "next-themes";
 import { MotionConfig } from "motion/react";
+import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { User } from "@/lib/api/types";
 import { AuthProvider } from "@/lib/auth/auth-context";
@@ -52,6 +54,9 @@ export function Providers({
               anyone with the OS setting on, so no component has to check. */}
           <MotionConfig reducedMotion="user">
             <AuthProvider initialUser={initialUser}>
+              <Suspense fallback={null}>
+                <NavigationProgress />
+              </Suspense>
               <TooltipProvider>{children}</TooltipProvider>
             </AuthProvider>
           </MotionConfig>
