@@ -59,6 +59,7 @@ const definition = {
     { name: "Wishlist", description: "Saved products for the signed-in shopper" },
     { name: "Orders", description: "Checkout and a customer's own order history" },
     { name: "Orders Admin", description: "Staff order queue: status workflow, corrections and removal" },
+    { name: "Dashboard", description: "Staff overview metrics, charts and operational alerts" },
     { name: "Categories", description: "Hierarchical catalog taxonomy and attribute configuration" },
     { name: "Brands", description: "Global product brands" },
     { name: "Attributes", description: "Reusable metadata-driven catalog attributes" },

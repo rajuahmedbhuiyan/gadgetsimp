@@ -209,6 +209,12 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((value) => value === "true"),
+
+  // Optional self-ping for free hosts that sleep after idle inbound traffic.
+  // An external monitor is still more reliable, because an in-process timer
+  // cannot wake a service that has already been suspended.
+  KEEP_ALIVE_URL: z.url("KEEP_ALIVE_URL must be a valid URL").optional(),
+  KEEP_ALIVE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(60).default(10),
 })
   /**
    * Cross-field checks. A half-configured provider is worse than an

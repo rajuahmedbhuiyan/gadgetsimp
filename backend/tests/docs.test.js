@@ -51,6 +51,7 @@ describe("OpenAPI spec", () => {
         "/orders",
         "/orders/filter",
         "/orders/{id}",
+        "/admin/dashboard",
         "/admin/orders/filter",
         "/admin/orders/{id}",
         "/admin/orders/{id}/status",

@@ -6,6 +6,7 @@ const { connectDatabase, disconnectDatabase, ensureIndexes } = require("./config
 const { disconnectRedis } = require("./config/redis");
 const { verifyMailer, closeMailer } = require("./config/mailer");
 const { verifyCloudinary } = require("./config/cloudinary");
+const { startKeepAlive, stopKeepAlive } = require("./config/keepAlive");
 const createApp = require("./app");
 
 /**
@@ -46,6 +47,7 @@ async function start() {
       logger.info(`API docs: http://localhost:${env.PORT}${env.API_PREFIX}/docs`);
     }
   });
+  startKeepAlive();
 
   // Slightly above the typical 60s ALB/ingress idle timeout, so the proxy
   // closes idle connections first and clients never see a truncated response.
@@ -89,6 +91,7 @@ function registerShutdownHandlers(server) {
 
       // closeMailer releases the pooled SMTP connections; without it the
       // process can linger holding open sockets to Gmail.
+      stopKeepAlive();
       await Promise.allSettled([disconnectDatabase(), disconnectRedis(), closeMailer()]);
       logger.info("Dependencies disconnected");
 

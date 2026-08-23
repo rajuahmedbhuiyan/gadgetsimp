@@ -302,6 +302,27 @@ warns in the log at 80% of `MAIL_DAILY_QUOTA`. Connections are pooled and paced
 `MAIL_FROM` to the same Gmail address or Gmail rewrites the header and delivery
 suffers.
 
+### Render Free keep-alive
+
+Render Free web services spin down after idle time. The API has a lightweight
+health endpoint at `/api/v1/health`; ping it every 10 minutes from a free uptime
+monitor such as cron-job.org or UptimeRobot:
+
+```text
+GET https://your-render-service.onrender.com/api/v1/health
+Every 10 minutes
+```
+
+There is also an optional in-process self-ping:
+
+```env
+KEEP_ALIVE_URL=https://your-render-service.onrender.com/api/v1/health
+KEEP_ALIVE_INTERVAL_MINUTES=10
+```
+
+The external monitor is more reliable because it can wake a service that has
+already slept. The in-process timer only keeps a currently running instance warm.
+
 ### Email templates
 
 Brand colour `#febc01`, in [`auth.emails.js`](src/modules/auth/auth.emails.js).
