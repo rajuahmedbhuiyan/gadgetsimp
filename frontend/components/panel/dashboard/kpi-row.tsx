@@ -13,10 +13,17 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { formatPrice } from "@/lib/format";
+import type { DashboardKpi } from "@/lib/api/admin/dashboard";
 import { cn } from "@/lib/utils";
-import { kpis } from "@/lib/panel/demo-data";
 
-export function KpiRow() {
+export function KpiRow({
+  currency,
+  kpis,
+}: {
+  currency: string;
+  kpis: DashboardKpi[];
+}) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {kpis.map((kpi) => {
@@ -32,7 +39,7 @@ export function KpiRow() {
               {/* Proportional figures on purpose: `tabular-nums` gives every
                   digit the width of a zero, which reads loose at this size. */}
               <p className="font-heading text-2xl font-semibold tracking-tight">
-                {kpi.value}
+                {formatKpiValue(kpi, currency)}
               </p>
 
               <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
@@ -56,4 +63,10 @@ export function KpiRow() {
       })}
     </div>
   );
+}
+
+function formatKpiValue(kpi: DashboardKpi, currency: string) {
+  if (kpi.format === "money") return formatPrice(kpi.value, currency);
+  if (kpi.format === "percent") return `${kpi.value}%`;
+  return kpi.value.toLocaleString("en-US");
 }

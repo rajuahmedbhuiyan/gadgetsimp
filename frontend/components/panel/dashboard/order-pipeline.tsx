@@ -19,8 +19,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import type { DashboardStatusCount } from "@/lib/api/admin/dashboard";
 import { statusMeta } from "@/lib/orders/status";
-import { ordersByStatus } from "@/lib/panel/demo-data";
 import { cn } from "@/lib/utils";
 
 /** The bar's fill, per status tone. The track stays neutral underneath it. */
@@ -31,7 +31,11 @@ const TONE_FILL: Record<string, string> = {
   danger: "bg-destructive",
 };
 
-export function OrderPipeline() {
+export function OrderPipeline({
+  ordersByStatus,
+}: {
+  ordersByStatus: DashboardStatusCount[];
+}) {
   const total = ordersByStatus.reduce((sum, row) => sum + row.count, 0);
 
   return (
@@ -68,7 +72,7 @@ export function OrderPipeline() {
                 <span className="text-sm font-medium tabular-nums">
                   {row.count.toLocaleString("en-US")}
                   <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                    {Math.round(share * 100)}%
+                    {total > 0 ? Math.round(share * 100) : 0}%
                   </span>
                 </span>
               </div>

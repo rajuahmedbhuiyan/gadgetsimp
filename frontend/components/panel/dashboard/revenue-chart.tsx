@@ -28,15 +28,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import type { DashboardRevenuePoint } from "@/lib/api/admin/dashboard";
 import { formatPrice } from "@/lib/format";
-import { DEMO_CURRENCY, revenueTrend } from "@/lib/panel/demo-data";
 
 /** Plot box, in px. The x-axis band is extra, so its labels are never clipped. */
 const PLOT_HEIGHT = 208;
@@ -46,7 +44,13 @@ const GUTTER = 46;
 const PAD_TOP = 18;
 const PAD_RIGHT = 14;
 
-export function RevenueChart() {
+export function RevenueChart({
+  currency,
+  revenueTrend,
+}: {
+  currency: string;
+  revenueTrend: DashboardRevenuePoint[];
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [active, setActive] = useState<number | null>(null);
@@ -67,8 +71,8 @@ export function RevenueChart() {
   }, []);
 
   const max = useMemo(
-    () => niceCeiling(Math.max(...revenueTrend.map((point) => point.revenue))),
-    [],
+    () => niceCeiling(Math.max(0, ...revenueTrend.map((point) => point.revenue))),
+    [revenueTrend],
   );
 
   const geometry = useMemo(() => {
@@ -95,7 +99,7 @@ export function RevenueChart() {
     const area = `${line} L${last.x},${baseline} L${first.x},${baseline} Z`;
 
     return { points, line, area, step, baseline, innerWidth };
-  }, [width, max]);
+  }, [width, max, revenueTrend]);
 
   // Five levels including zero and the top: enough to read a value off,
   // few enough to stay out of the way.
@@ -114,20 +118,20 @@ export function RevenueChart() {
 
     const bounds = element.getBoundingClientRect();
     const index = Math.round((clientX - bounds.left - GUTTER) / geometry.step);
-    setActive(clamp(index, 0, revenueTrend.length - 1));
+    setActive(clamp(index, 0, Math.max(revenueTrend.length - 1, 0)));
   }
 
   function onKeyDown(event: React.KeyboardEvent) {
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       event.preventDefault();
       const next = (active ?? -1) + (event.key === "ArrowRight" ? 1 : -1);
-      setActive(clamp(next, 0, revenueTrend.length - 1));
+      setActive(clamp(next, 0, Math.max(revenueTrend.length - 1, 0)));
     } else if (event.key === "Escape") {
       setActive(null);
     }
   }
 
-  const latest = revenueTrend.at(-1)!;
+  const latest = revenueTrend.at(-1) ?? { month: "Now", revenue: 0 };
 
   return (
     <Card className="min-w-0">
@@ -136,9 +140,6 @@ export function RevenueChart() {
         <CardDescription>
           Last 12 months, delivered orders only
         </CardDescription>
-        <CardAction>
-          <Badge variant="secondary">Placeholder</Badge>
-        </CardAction>
       </CardHeader>
 
       <CardContent className="min-w-0">
@@ -155,7 +156,7 @@ export function RevenueChart() {
               height={PLOT_HEIGHT + AXIS_BAND}
               role="img"
               tabIndex={0}
-              aria-label={`Monthly revenue for the last twelve months, ending at ${formatPrice(latest.revenue, DEMO_CURRENCY)} in ${latest.month}. Use the arrow keys to step through each month, or read every value in the table below.`}
+              aria-label={`Monthly revenue for the last twelve months, ending at ${formatPrice(latest.revenue, currency)} in ${latest.month}. Use the arrow keys to step through each month, or read every value in the table below.`}
               onKeyDown={onKeyDown}
               onBlur={() => setActive(null)}
               className="overflow-visible rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -212,7 +213,7 @@ export function RevenueChart() {
                 textAnchor="end"
                 className="fill-foreground text-[11px] font-medium"
               >
-                {formatPrice(latest.revenue, DEMO_CURRENCY)}
+                {formatPrice(latest.revenue, currency)}
               </text>
 
               {/* Hover / focus --------------------------------------- */}
@@ -267,7 +268,7 @@ export function RevenueChart() {
                 {activePoint.month}
               </p>
               <p className="text-sm font-semibold tabular-nums">
-                {formatPrice(activePoint.revenue, DEMO_CURRENCY)}
+                {formatPrice(activePoint.revenue, currency)}
               </p>
             </div>
           )}
@@ -300,7 +301,7 @@ export function RevenueChart() {
                     {point.month}
                   </th>
                   <td className="py-1.5 text-right tabular-nums">
-                    {formatPrice(point.revenue, DEMO_CURRENCY)}
+                    {formatPrice(point.revenue, currency)}
                   </td>
                 </tr>
               ))}
@@ -318,6 +319,8 @@ function clamp(value: number, min: number, max: number) {
 
 /** `793,000` -> `800,000`, so the top gridline is a number, not a maximum. */
 function niceCeiling(max: number) {
+  if (max <= 0) return 1;
+
   const magnitude = 10 ** Math.floor(Math.log10(max));
   for (const factor of [1, 2, 2.5, 5, 10]) {
     const step = magnitude * factor;

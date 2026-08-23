@@ -19,12 +19,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { lowStock } from "@/lib/panel/demo-data";
+import type { DashboardStockLine } from "@/lib/api/admin/dashboard";
 import { cn } from "@/lib/utils";
 
-export function LowStockCard() {
+export function LowStockCard({ lowStock }: { lowStock: DashboardStockLine[] }) {
   const rows = [...lowStock].sort(
-    (a, b) => a.stock / a.threshold - b.stock / b.threshold,
+    (a, b) =>
+      a.stock / Math.max(a.threshold, 1) -
+      b.stock / Math.max(b.threshold, 1),
   );
 
   return (
@@ -44,8 +46,14 @@ export function LowStockCard() {
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No tracked variants are under their threshold.
+          </p>
+        ) : null}
+
         {rows.map((row) => {
-          const share = Math.min(row.stock / row.threshold, 1);
+          const share = Math.min(row.stock / Math.max(row.threshold, 1), 1);
           const out = row.stock === 0;
 
           return (
