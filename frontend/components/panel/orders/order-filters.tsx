@@ -439,7 +439,7 @@ export function OrderFilters({
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="right"
-          className="w-full gap-0 overflow-y-auto sm:max-w-sm"
+          className="w-[450px]! max-w-[100vw]! gap-0 overflow-y-auto"
         >
           {/*
             * Mounted only while open, which is what re-seeds the draft from

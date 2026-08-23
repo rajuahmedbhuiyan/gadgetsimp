@@ -66,7 +66,7 @@ export function PanelSidebar({
   onPeekChange: (peeking: boolean) => void;
 }) {
   const pathname = usePathname();
-  const { isMobile } = useSidebar();
+  const { isMobile, setOpenMobile } = useSidebar();
   const groups = navFor(user);
   const active = activeNavItem(pathname);
 
@@ -75,6 +75,9 @@ export function PanelSidebar({
   // it could usefully do.
   const onDashboard = pathname === PANEL_ROOT;
   const brandHref = onDashboard ? "/" : PANEL_ROOT;
+  const closeMobileSidebar = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   return (
     <Sidebar
@@ -95,6 +98,7 @@ export function PanelSidebar({
               size="lg"
               tooltip={onDashboard ? "Back to the shop" : "Dashboard"}
               className="group-data-[collapsible=icon]:size-10!"
+              onClick={closeMobileSidebar}
               render={<Link href={brandHref} />}
             >
               <span className="flex aspect-square size-8 items-center justify-center rounded-lg bg-brand font-heading text-sm font-bold tracking-tight text-brand-foreground">
@@ -137,6 +141,7 @@ export function PanelSidebar({
                         ROW,
                         "data-active:bg-brand/15 data-active:text-brand",
                       )}
+                      onClick={closeMobileSidebar}
                       render={<Link href={item.href} />}
                     >
                       <item.icon aria-hidden />
@@ -156,6 +161,7 @@ export function PanelSidebar({
             <SidebarMenuButton
               tooltip="View the shop"
               className={ROW}
+              onClick={closeMobileSidebar}
               render={<Link href="/" />}
             >
               <Store aria-hidden />

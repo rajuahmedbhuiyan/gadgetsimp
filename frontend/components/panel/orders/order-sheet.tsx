@@ -98,7 +98,7 @@ export function OrderSheet({
           columns of tiles and a line-item list, and squeezing that into a
           phone-width column on a desktop wrapped every value onto its own
           row. */}
-      <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-2xl lg:max-w-3xl">
+      <SheetContent className="overflow-y-auto w-[450px]! max-w-[100vw]!">
         {order ? (
           /*
            * Keyed by order, so moving to the next one remounts the body: its

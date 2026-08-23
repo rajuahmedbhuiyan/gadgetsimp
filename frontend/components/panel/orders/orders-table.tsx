@@ -39,6 +39,7 @@ import { formatPrice } from "@/lib/format";
 import { formatOrderDate } from "@/lib/orders/status";
 import type { AdminOrder, OrderStatusName } from "@/lib/api/admin/orders";
 import type { OrderPermissions } from "@/lib/panel/permissions";
+import { PanelMenuBackdrop } from "@/components/panel/menu-backdrop";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -679,6 +680,7 @@ function RowActions({
   onSoftDelete,
   onHardDelete,
 }: { order: AdminOrder } & Omit<OrdersTableProps, "orders" | "busy">) {
+  const [open, setOpen] = useState(false);
   const removable =
     (permissions.remove && !order.deletedAt) || permissions.destroy;
 
@@ -732,7 +734,8 @@ function RowActions({
       </Button>
 
       {removable ? (
-        <DropdownMenu>
+        <DropdownMenu open={open} onOpenChange={setOpen}>
+          {open ? <PanelMenuBackdrop onClick={() => setOpen(false)} /> : null}
           <DropdownMenuTrigger
             render={
               <Button

@@ -82,7 +82,7 @@ export function MobileNav() {
 
       <SheetContent
         side="left"
-        className="w-[88vw] max-w-sm gap-0 overflow-y-auto p-0"
+        className="w-[88vw]! max-w-sm! gap-0 overflow-y-auto p-0"
       >
         <SheetHeader className="border-b p-4">
           <SheetTitle className="flex items-center">

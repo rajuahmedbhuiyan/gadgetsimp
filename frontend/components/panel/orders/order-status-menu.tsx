@@ -32,6 +32,7 @@ import {
   type OrderStatusName,
 } from "@/lib/api/admin/orders";
 import type { OrderPermissions } from "@/lib/panel/permissions";
+import { PanelMenuBackdrop } from "@/components/panel/menu-backdrop";
 import {
   Drawer,
   DrawerContent,
@@ -155,7 +156,8 @@ export function OrderStatusMenu({
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      {open ? <PanelMenuBackdrop onClick={() => setOpen(false)} /> : null}
       <DropdownMenuTrigger
         render={<button type="button" aria-label={label} className={TRIGGER} />}
       >
@@ -178,7 +180,10 @@ export function OrderStatusMenu({
             return (
               <DropdownMenuItem
                 key={status}
-                onClick={() => onChangeStatus(order, status)}
+                onClick={() => {
+                  setOpen(false);
+                  onChangeStatus(order, status);
+                }}
                 className={cn(
                   "cursor-pointer py-2 text-sm",
                   negative && "text-destructive data-highlighted:text-destructive",

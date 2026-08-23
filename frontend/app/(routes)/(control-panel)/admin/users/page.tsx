@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { PanelPlaceholder } from "@/components/panel/panel-placeholder";
+import { UsersView } from "@/components/panel/users/users-view";
 
 export const metadata: Metadata = { title: "Users" };
 
 export default function AdminUsersPage() {
-  return <PanelPlaceholder href="/admin/users" />;
+  return <UsersView />;
 }

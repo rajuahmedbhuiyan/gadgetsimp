@@ -339,7 +339,7 @@ export function ShopView() {
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent
           side="left"
-          className="flex w-[min(22rem,88vw)] flex-col gap-0 p-0"
+          className="flex w-[min(22rem,88vw)]! flex-col gap-0 p-0"
         >
           <SheetHeader className="border-b">
             <SheetTitle className="flex items-center gap-2 text-base">

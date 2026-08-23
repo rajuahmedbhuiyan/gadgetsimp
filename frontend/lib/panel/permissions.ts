@@ -75,3 +75,37 @@ export function orderPermissions(
     destroy: admin,
   };
 }
+
+/* ---------------------------------- users -------------------------------- */
+
+export interface UserPermissions {
+  view: boolean;
+  create: boolean;
+  changeRole: boolean;
+  changeStatus: boolean;
+  remove: boolean;
+  destroy: boolean;
+}
+
+/**
+ * The user router has one read gate and several sharper write gates.
+ *
+ * Listing users, role changes, account status changes and soft delete are
+ * admin-and-above. Direct account creation and permanent deletion are
+ * owner-only, because both can bypass or erase account history.
+ */
+export function userPermissions(
+  user: Pick<User, "role"> | null | undefined,
+): UserPermissions {
+  const admin = hasRole(user, "ROLE_ADMIN");
+  const owner = hasRole(user, "ROLE_OWNER");
+
+  return {
+    view: admin,
+    create: owner,
+    changeRole: admin,
+    changeStatus: admin,
+    remove: admin,
+    destroy: owner,
+  };
+}
