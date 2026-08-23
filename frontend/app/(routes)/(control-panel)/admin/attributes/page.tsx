@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { PanelPlaceholder } from "@/components/panel/panel-placeholder";
+import { AttributesView } from "@/components/panel/attributes/attributes-view";
 
 export const metadata: Metadata = { title: "Attributes" };
 
 export default function AdminAttributesPage() {
-  return <PanelPlaceholder href="/admin/attributes" />;
+  return <AttributesView />;
 }

@@ -132,3 +132,20 @@ export function brandPermissions(
     remove: admin,
   };
 }
+
+/* ------------------------------- attributes ------------------------------ */
+
+export interface AttributePermissions {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  remove: boolean;
+}
+
+export function attributePermissions(
+  user: Pick<User, "role"> | null | undefined,
+): AttributePermissions {
+  const admin = hasRole(user, "ROLE_ADMIN");
+
+  return { view: admin, create: admin, edit: admin, remove: admin };
+}

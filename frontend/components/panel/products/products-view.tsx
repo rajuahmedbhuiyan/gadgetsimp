@@ -134,7 +134,7 @@ export function ProductsView() {
           * visibility rules, so anything unpublished is absent from every page
           * of this table - see `lib/api/admin/products`.
           */}
-        <p className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/8 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+        {/* <p className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/8 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
           <AlertTriangle
             className="mt-px size-3.5 shrink-0 text-warning-foreground dark:text-warning"
             aria-hidden
@@ -145,7 +145,7 @@ export function ProductsView() {
           <strong className="font-semibold text-foreground"> Hidden </strong>
           will not appear here — open it from its own link, or set it back to
           Active and Public.
-        </p>
+        </p> */}
 
         {isError ? (
           <Failed onRetry={() => void refetch()} />
