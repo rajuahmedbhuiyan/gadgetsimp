@@ -167,3 +167,19 @@ export function categoryPermissions(
 
   return { view: admin, create: admin, edit: admin, sort: admin, remove: admin };
 }
+
+/* ------------------------------- variations ------------------------------ */
+
+export interface VariationPermissions {
+  view: boolean;
+  edit: boolean;
+  remove: boolean;
+}
+
+export function variationPermissions(
+  user: Pick<User, "role"> | null | undefined,
+): VariationPermissions {
+  const admin = hasRole(user, "ROLE_ADMIN");
+
+  return { view: admin, edit: admin, remove: admin };
+}

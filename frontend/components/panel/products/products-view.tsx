@@ -8,11 +8,10 @@
  * "search for laptops, then page 3".
  */
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 import {
-  AlertTriangle,
   PackagePlus,
   PackageSearch,
   Plus,
@@ -48,6 +47,7 @@ import { ProductFilters, PRODUCT_SORTS } from "./product-filters";
 import { ProductsTable } from "./products-table";
 
 export function ProductsView() {
+  const topRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const permissions = productPermissions(user);
 
@@ -72,12 +72,20 @@ export function ProductsView() {
   const chosen =
     PRODUCT_SORTS.find((option) => option.value === sort) ?? PRODUCT_SORTS[0];
 
-  const query: AdminProductQuery = {
-    ...(q ? { search: q } : {}),
-    ...(category ? { categoryId: category } : {}),
-    sort: { field: chosen.field, direction: chosen.direction },
-    pagination: { page: pageIndex, limit: PRODUCTS_PAGE_SIZE },
-  };
+  const query: AdminProductQuery = useMemo(
+    () => ({
+      ...(q ? { search: q } : {}),
+      ...(category ? { categoryId: category } : {}),
+      sort: { field: chosen.field, direction: chosen.direction },
+      pagination: { page: pageIndex, limit: PRODUCTS_PAGE_SIZE },
+    }),
+    [category, chosen.direction, chosen.field, pageIndex, q],
+  );
+  const queryMarker = useMemo(() => JSON.stringify(query), [query]);
+
+  useEffect(() => {
+    topRef.current?.scrollIntoView({ block: "start" });
+  }, [queryMarker]);
 
   const { products, meta, isLoading, isFetching, isError, refetch } =
     useAdminProducts(query);
@@ -97,36 +105,41 @@ export function ProductsView() {
 
   return (
     <>
-      <PanelPageHeading
-        title="Products"
-        description="Everything in the catalogue, and the way in to editing it."
-        action={
-          permissions.create ? (
-            <Button
-              className="h-10 cursor-pointer gap-2 rounded-lg text-sm font-semibold"
-              render={<Link href="/admin/products/new" />}
-            >
-              <Plus className="size-4" aria-hidden />
-              <span className="max-sm:sr-only">New product</span>
-            </Button>
-          ) : null
-        }
-      />
+      <div
+        ref={topRef}
+        className="flex min-w-0 scroll-mt-24 flex-col gap-4 lg:h-[calc(100svh-var(--h-header)-3rem)] lg:min-h-0"
+      >
+        <div className="sticky top-header z-20 -mt-4 flex min-w-0 flex-col gap-3 border-b bg-background/95 pt-4 pb-3 supports-backdrop-filter:bg-background/80 supports-backdrop-filter:backdrop-blur-lg sm:-mt-6 sm:pt-6">
+          <PanelPageHeading
+            title="Products"
+            description="Everything in the catalogue, and the way in to editing it."
+            action={
+              permissions.create ? (
+                <Button
+                  className="h-10 cursor-pointer gap-2 rounded-lg text-sm font-semibold"
+                  render={<Link href="/admin/products/new" />}
+                >
+                  <Plus className="size-4" aria-hidden />
+                  <span className="max-sm:sr-only">New product</span>
+                </Button>
+              ) : null
+            }
+          />
 
-      <div className="flex flex-col gap-4">
-        <ProductFilters
-          search={q}
-          onSearchChange={(value) =>
-            void setQuery({ q: value || null, page: null })
-          }
-          categoryId={category}
-          onCategoryChange={(value) =>
-            void setQuery({ category: value || null, page: null })
-          }
-          sort={sort}
-          onSortChange={(value) => void setQuery({ sort: value, page: null })}
-          categories={tree}
-        />
+          <ProductFilters
+            search={q}
+            onSearchChange={(value) =>
+              void setQuery({ q: value || null, page: null })
+            }
+            categoryId={category}
+            onCategoryChange={(value) =>
+              void setQuery({ category: value || null, page: null })
+            }
+            sort={sort}
+            onSortChange={(value) => void setQuery({ sort: value, page: null })}
+            categories={tree}
+          />
+        </div>
 
         {/*
           * Said once, at the top, rather than discovered when a draft goes
@@ -147,47 +160,49 @@ export function ProductsView() {
           Active and Public.
         </p> */}
 
-        {isError ? (
-          <Failed onRetry={() => void refetch()} />
-        ) : isLoading ? (
-          <TableSkeleton />
-        ) : products.length === 0 ? (
-          <Empty
-            filtered={filtered}
-            canCreate={permissions.create}
-            onClear={() => void setQuery({ q: null, category: null, page: null })}
-          />
-        ) : (
-          <>
-            <ProductsTable
-              products={products}
-              permissions={permissions}
-              busy={isFetching}
-              onToggleFeatured={(product, featured) =>
-                toggleFeatured.mutate({ id: product.id, featured })
-              }
-              onDelete={setPendingDelete}
+        <div className="flex min-w-0 min-h-0 flex-1 flex-col gap-4">
+          {isError ? (
+            <Failed onRetry={() => void refetch()} />
+          ) : isLoading ? (
+            <TableSkeleton />
+          ) : products.length === 0 ? (
+            <Empty
+              filtered={filtered}
+              canCreate={permissions.create}
+              onClear={() => void setQuery({ q: null, category: null, page: null })}
             />
+          ) : (
+            <>
+              <ProductsTable
+                products={products}
+                permissions={permissions}
+                busy={isFetching}
+                onToggleFeatured={(product, featured) =>
+                  toggleFeatured.mutate({ id: product.id, featured })
+                }
+                onDelete={setPendingDelete}
+              />
 
-            {/*
+              {/*
               * Rides the bottom edge, like the search and tabs ride the top.
               * On a phone the card list is far taller than the viewport, and a
               * pager you have to reach the end of to use is one people scroll
               * past looking for. Negative margins take it to the edges of the
               * shell's padding so the blur covers the full width.
               */}
-            <div className="sticky bottom-0 z-20 -mx-4 -mb-4 border-t bg-background/95 px-4 py-3 supports-backdrop-filter:bg-background/80 supports-backdrop-filter:backdrop-blur-lg sm:-mx-6 sm:-mb-6 sm:px-6">
-              {meta ? (
-                <Pager
-                  meta={meta}
-                  shown={products.length}
-                  noun="products"
-                  onPageChange={(next) => void setQuery({ page: next + 1 })}
-                />
-              ) : null}
-            </div>
-          </>
-        )}
+              <div className="sticky bottom-0 z-20 -mx-4 -mb-4 border-t bg-background/95 px-4 py-3 supports-backdrop-filter:bg-background/80 supports-backdrop-filter:backdrop-blur-lg sm:-mx-6 sm:-mb-6 sm:px-6">
+                {meta ? (
+                  <Pager
+                    meta={meta}
+                    shown={products.length}
+                    noun="products"
+                    onPageChange={(next) => void setQuery({ page: next + 1 })}
+                  />
+                ) : null}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <AlertDialog

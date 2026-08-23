@@ -14,9 +14,10 @@
  * truthfully is stock and whether it is featured.
  */
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ImageOff, Pencil, Star, Trash2 } from "lucide-react";
+import { Check, Copy, ImageOff, Pencil, Star, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { formatPrice, formatPriceRange } from "@/lib/format";
@@ -45,9 +46,7 @@ export interface ProductsTableProps {
 export function ProductsTable(props: ProductsTableProps) {
   return (
     <>
-      <div className="hidden lg:block">
-        <DesktopTable {...props} />
-      </div>
+      <DesktopTable {...props} />
       <div className="flex flex-col gap-3 lg:hidden">
         {props.products.map((product) => (
           <MobileCard key={product.id} product={product} {...props} />
@@ -67,11 +66,20 @@ function DesktopTable({
   onDelete,
 }: ProductsTableProps) {
   return (
-    <div className={cn("overflow-hidden rounded-xl border", busy && "opacity-60")}>
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-[38%]">Product</TableHead>
+    <div
+      className={cn(
+        "hidden min-h-0 flex-1 rounded-xl border bg-card lg:block",
+        "[&>[data-slot=table-container]]:h-full",
+        "[&>[data-slot=table-container]]:overflow-auto",
+        busy && "opacity-60",
+      )}
+    >
+      <Table className="min-w-[1180px]">
+        <TableHeader className="sticky top-0 z-10 bg-muted">
+          <TableRow className="bg-muted hover:bg-muted">
+            <TableHead className="w-[30%] pl-4">Product</TableHead>
+            <TableHead>SKU</TableHead>
+            <TableHead>Type</TableHead>
             <TableHead>Category</TableHead>
             <TableHead>Price</TableHead>
             <TableHead>Stock</TableHead>
@@ -83,7 +91,7 @@ function DesktopTable({
         <TableBody>
           {products.map((product) => (
             <TableRow key={product.id}>
-              <TableCell>
+              <TableCell className="pl-4">
                 <div className="flex items-center gap-3">
                   <Thumb product={product} />
                   <div className="min-w-0">
@@ -99,6 +107,14 @@ function DesktopTable({
                     </p>
                   </div>
                 </div>
+              </TableCell>
+
+              <TableCell>
+                <SkuCell product={product} />
+              </TableCell>
+
+              <TableCell>
+                <ProductTypeCell product={product} />
               </TableCell>
 
               <TableCell>
@@ -152,7 +168,7 @@ function MobileCard({
   return (
     <article
       className={cn(
-        "flex flex-col gap-3 rounded-xl border bg-card p-3",
+        "flex min-w-0 flex-col gap-3 overflow-hidden rounded-xl border bg-card p-3",
         busy && "opacity-60",
       )}
     >
@@ -169,6 +185,10 @@ function MobileCard({
           <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
             {product.brandId?.name ?? "No brand"}
           </p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <SkuCell product={product} />
+            <ProductTypeCell product={product} />
+          </div>
           <p className="mt-1.5 text-sm font-bold text-price tabular-nums">
             <PriceCell product={product} />
           </p>
@@ -217,6 +237,19 @@ function RowActions({
 }) {
   return (
     <div className="flex items-center justify-end gap-1">
+      <CopyValueButton
+        value={product.id}
+        label={`Copy ${product.name} id`}
+        copiedLabel="Product id copied"
+      />
+      {product.sku ? (
+        <CopyValueButton
+          value={product.sku}
+          label={`Copy ${product.name} SKU`}
+          copiedLabel="SKU copied"
+        />
+      ) : null}
+
       {permissions.edit ? (
         <Button
           variant="ghost"
@@ -241,6 +274,66 @@ function RowActions({
         </Button>
       ) : null}
     </div>
+  );
+}
+
+function CopyValueButton({
+  value,
+  label,
+  copiedLabel,
+}: {
+  value: string;
+  label: string;
+  copiedLabel: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  return (
+    <button
+      type="button"
+      aria-label={copied ? copiedLabel : label}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+        } catch {
+          // The value is visible on screen, so clipboard failures stay quiet.
+        }
+      }}
+      className="flex size-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      {copied ? (
+        <Check className="size-4 text-success" aria-hidden />
+      ) : (
+        <Copy className="size-4" aria-hidden />
+      )}
+    </button>
+  );
+}
+
+function SkuCell({ product }: { product: AdminProductRow }) {
+  if (!product.sku) {
+    return <span className="text-xs text-muted-foreground">No SKU</span>;
+  }
+
+  return (
+    <span className="inline-flex max-w-40 truncate rounded-md border bg-background px-2 py-1 font-mono text-xs">
+      {product.sku}
+    </span>
+  );
+}
+
+function ProductTypeCell({ product }: { product: AdminProductRow }) {
+  return (
+    <Badge variant="outline" className="font-normal">
+      {product.productType === "VARIABLE" ? "Variable" : "Simple"}
+    </Badge>
   );
 }
 

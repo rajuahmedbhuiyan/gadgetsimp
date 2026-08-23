@@ -84,6 +84,7 @@ export interface AdminProductRow {
   id: string;
   name: string;
   slug: string;
+  sku?: string;
   shortDescription?: string;
   categoryIds: TaxonomyRef[];
   brandId?: TaxonomyRef | null;
