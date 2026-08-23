@@ -334,7 +334,24 @@ const ORDER_NEGATIVE_STATUSES = Object.freeze([
  */
 const ORDER_STATUS_FLOW = Object.freeze({
   [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELED],
-  [ORDER_STATUS.CONFIRMED]: [ORDER_STATUS.OUT_FOR_DELIVERY, ORDER_STATUS.CANCELED],
+  /**
+   * A confirmed order can finish without ever being marked out for delivery.
+   *
+   * The dispatch step is real but it is not always *recorded* - a rider takes
+   * a parcel straight out, or the shop hands it over at the counter, and the
+   * next thing anyone touches is the outcome. Forcing OUT_FOR_DELIVERY through
+   * first does not make that step happen; it makes staff type a status that
+   * already passed, which is a worse record than the one with a gap in it.
+   *
+   * `statusHistory` keeps whichever steps genuinely occurred, so the tracker
+   * shows a shorter path rather than an invented one.
+   */
+  [ORDER_STATUS.CONFIRMED]: [
+    ORDER_STATUS.OUT_FOR_DELIVERY,
+    ORDER_STATUS.DELIVERED,
+    ORDER_STATUS.RETURNED,
+    ORDER_STATUS.CANCELED,
+  ],
   [ORDER_STATUS.OUT_FOR_DELIVERY]: [
     ORDER_STATUS.DELIVERED,
     ORDER_STATUS.RETURNED,
