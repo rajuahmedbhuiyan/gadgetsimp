@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { SlidersHorizontal } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -242,7 +243,12 @@ export function ShopView() {
       >
         <div>
           <h1 className="font-heading text-2xl font-bold tracking-tight lg:text-3xl">
-            {filters.search ? `Results for “${filters.search}”` : "Shop"}
+            <Link
+              href="/"
+              className="rounded-md transition-colors hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+            >
+              {filters.search ? `Results for “${filters.search}”` : "Shop"}
+            </Link>
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
             {filters.search

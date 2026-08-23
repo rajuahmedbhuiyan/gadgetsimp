@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronDown } from "lucide-react";
 
@@ -23,6 +23,7 @@ const CLOSE_DELAY_MS = 120;
 
 export function DesktopNav({ className }: { className?: string }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [openLabel, setOpenLabel] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -66,16 +67,28 @@ export function DesktopNav({ className }: { className?: string }) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [openLabel]);
 
-  const isActive = (href: string) =>
-    href === "/"
-      ? pathname === "/"
-      : pathname.startsWith(href.split("?")[0]!);
+  const isActive = (item: (typeof mainNav)[number]) => {
+    if (item.external) return false;
+    if (item.label === "Home") return pathname === "/";
+    if (item.label === "Deals") {
+      return pathname === "/shop" && searchParams.get("onSale") === "true";
+    }
+    if (item.label === "Categories") {
+      return pathname === "/categories" || (pathname === "/shop" && searchParams.has("category"));
+    }
+    if (item.label === "Shop") {
+      return pathname === "/shop" && !searchParams.has("category") && searchParams.get("onSale") !== "true";
+    }
+
+    const [path] = item.href.split("?");
+    return pathname === path || pathname.startsWith(`${path}/`);
+  };
 
   return (
     <nav aria-label="Main" className={className}>
       <ul className="flex items-center gap-1">
         {mainNav.map((item) => {
-          const active = isActive(item.href);
+          const active = isActive(item);
           const expanded = openLabel === item.label;
 
           return (
@@ -115,10 +128,8 @@ export function DesktopNav({ className }: { className?: string }) {
                   />
                 )}
                 {active && (
-                  <motion.span
-                    layoutId="nav-active"
+                  <span
                     className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-brand"
-                    transition={transitions.spring}
                   />
                 )}
               </NavLink>
@@ -139,6 +150,7 @@ export function DesktopNav({ className }: { className?: string }) {
                           <NavLink
                             href={child.href}
                             external={child.external}
+                            onClick={() => setOpenLabel(null)}
                             className="group/item block rounded-lg px-3 py-2 transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
                           >
                             <span className="block text-sm font-medium text-foreground group-hover/item:text-brand">
