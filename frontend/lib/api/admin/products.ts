@@ -7,11 +7,9 @@
  *
  * Two things about this surface are worth knowing before using it:
  *
- * **The list is the public catalogue.** `POST /products/filter` runs through
- * the same `publicMatch()` the storefront does, so it returns only published,
- * `PUBLIC`, `ACTIVE`/`OUT_OF_STOCK` products, and its projection carries no
- * `status` or `visibility`. A `DRAFT` or `HIDDEN` product is reachable by id
- * but will not appear in any listing. `getById` has no such limit.
+ * **The list is the admin catalogue.** `POST /products/filter` can include
+ * drafts, hidden products and lifecycle filters. The storefront reads through
+ * `/shop`, which keeps its own public-only gate.
  *
  * **Saving is per-panel, not whole-document.** `PUT /products/:id` replaces
  * the record, so a form that did not load every field would silently reset the
@@ -79,7 +77,7 @@ export interface ProductSeo {
   twitterImage?: string;
 }
 
-/** A row in the admin table. Note the absent `status`/`visibility`. */
+/** A row in the admin table. */
 export interface AdminProductRow {
   id: string;
   name: string;
@@ -89,6 +87,8 @@ export interface AdminProductRow {
   categoryIds: TaxonomyRef[];
   brandId?: TaxonomyRef | null;
   productType: ProductType;
+  status: ProductStatus;
+  visibility: ProductVisibility;
   featured: boolean;
   tags: string[];
   thumbnail?: AdminImage | null;
@@ -120,16 +120,24 @@ export interface AdminProduct extends AdminProductRow {
   variationOptions?: Record<string, string[]>;
 }
 
-/**
- * What the listing accepts - and no more. The body is `.strict()`, so a
- * `status` or `brandId` key here is a 422 rather than an ignored field.
- */
+/** What the admin listing accepts. The API body is still `.strict()`. */
 export interface AdminProductQuery {
   categoryId?: string;
+  brandId?: string;
+  status?: ProductStatus;
+  visibility?: ProductVisibility;
+  productType?: ProductType;
+  featured?: boolean;
+  stockStatus?: StockStatus;
   search?: string;
   filters?: Record<string, string[] | { min?: number; max?: number }>;
+  price?: { min?: number; max?: number };
+  createdFrom?: string;
+  createdTo?: string;
+  updatedFrom?: string;
+  updatedTo?: string;
   sort?: {
-    field?: "relevance" | "price" | "name" | "createdAt";
+    field?: "relevance" | "price" | "name" | "createdAt" | "updatedAt";
     direction?: "asc" | "desc";
   };
   pagination?: { page?: number; limit?: number };

@@ -325,15 +325,15 @@ export const footerNav: readonly {
       { label: "New arrivals", href: "/shop?sort=createdAt" },
       { label: "Best sellers", href: "/shop?featured=true" },
       { label: "Clearance", href: "/shop?onSale=true" },
-      { label: "Gift cards", href: "/gift-cards" },
+      // { label: "Gift cards", href: "/gift-cards" },
     ],
   },
   {
     title: "Help",
     links: [
-      { label: "Track your order", href: "/orders/track" },
-      { label: "Delivery & pickup", href: "/support/delivery" },
-      { label: "Returns & refunds", href: "/support/returns" },
+      { label: "Track your order", href: "/orders" },
+      { label: "Delivery & pickup", href: "/" },
+      { label: "Returns & refunds", href: "/" },
       { label: "Chat on WhatsApp", href: contact.whatsappHref, external: true },
     ],
   },
@@ -341,16 +341,16 @@ export const footerNav: readonly {
     title: "Company",
     links: [
       { label: "About us", href: "/about" },
-      { label: "Careers", href: "/careers" },
-      { label: "Blog", href: "/blog" },
+      { label: "Careers", href: "/" },
+      { label: "Blog", href: "/" },
     ],
   },
 ];
 
 export const legalNav = [
-  { label: "Privacy policy", href: "/legal/privacy" },
-  { label: "Terms of service", href: "/legal/terms" },
-  { label: "Refund policy", href: "/legal/refunds" },
+  { label: "Privacy policy", href: "/" },
+  { label: "Terms of service", href: "/" },
+  { label: "Refund policy", href: "/" },
 ] as const;
 
 /** The header's quick search, reused by the mobile drawer. */

@@ -13,7 +13,7 @@
  * not a cramped one.
  */
 
-import type { Dispatch, ReactNode, SetStateAction } from "react";
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -24,6 +24,7 @@ import {
   normaliseSku,
   normaliseSlug,
   numericOnly,
+  parsePastedSpecs,
   seoFromProduct,
   skuToken,
 } from "@/lib/panel/product-form";
@@ -778,11 +779,47 @@ function SpecFields({
   setState,
   errors,
 }: PanelProps & { editing?: boolean }) {
+  const [pasteText, setPasteText] = useState("");
+  const [pasteResult, setPasteResult] = useState<string | null>(null);
+
   const update = (index: number, next: ProductFormState["specs"][number]) =>
     setState((current) => ({
       ...current,
       specs: current.specs.map((group, at) => (at === index ? next : group)),
     }));
+
+  const importSpecs = () => {
+    const existingKeys = state.specs.flatMap((group) =>
+      group.options.map((option) => option.key.trim()).filter(Boolean),
+    );
+    const parsed = parsePastedSpecs(pasteText, existingKeys);
+    const rowCount = parsed.groups.reduce(
+      (count, group) => count + group.options.length,
+      0,
+    );
+
+    if (rowCount === 0) {
+      setPasteResult("No specs found. Use headings like ### Memory, then key/value lines.");
+      return;
+    }
+
+    setState((current) => {
+      const realGroups = current.specs.filter(groupFilled);
+
+      return {
+        ...current,
+        specs: [...realGroups, ...parsed.groups],
+      };
+    });
+    setPasteText("");
+    setPasteResult(
+      `Imported ${rowCount} row${rowCount === 1 ? "" : "s"} in ${
+        parsed.groups.length
+      } group${parsed.groups.length === 1 ? "" : "s"}${
+        parsed.skipped ? `; skipped ${parsed.skipped} unpaired line${parsed.skipped === 1 ? "" : "s"}` : ""
+      }.`,
+    );
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -791,6 +828,39 @@ function SpecFields({
           {errors.specs}
         </p>
       ) : null}
+
+      <div className="rounded-lg border bg-muted/20 p-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Import specs</h3>
+            <p className="text-xs text-muted-foreground">
+              Paste copied specs with headings and key/value lines.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={importSpecs}
+            disabled={!pasteText.trim()}
+            className="h-9 cursor-pointer gap-1.5 rounded-lg px-3 text-xs"
+          >
+            <Plus className="size-3.5" aria-hidden />
+            Fill attributes
+          </Button>
+        </div>
+        <Textarea
+          value={pasteText}
+          placeholder={"e.g.\n### Memory\nMemory Type\n**DDR4**\nBus Speed\n**3200MHz**"}
+          className="mt-3 min-h-32 resize-y rounded-lg text-xs"
+          onChange={(event) => {
+            setPasteText(event.target.value);
+            setPasteResult(null);
+          }}
+        />
+        {pasteResult ? (
+          <p className="mt-2 text-xs text-muted-foreground">{pasteResult}</p>
+        ) : null}
+      </div>
 
       {state.specs.map((group, groupIndex) => (
         <div key={groupIndex} className="rounded-lg border p-3">
@@ -921,6 +991,14 @@ function SpecFields({
 
     </div>
   );
+}
+
+function groupFilled(group: ProductFormState["specs"][number]) {
+  return group.title.trim() || group.options.some(optionFilled);
+}
+
+function optionFilled(option: ProductFormState["specs"][number]["options"][number]) {
+  return option.key.trim() || option.value.trim();
 }
 
 /* -------------------------------- shipping -------------------------------- */

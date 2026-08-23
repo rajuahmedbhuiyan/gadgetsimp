@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
  * write to that field, would otherwise have script execution on every visitor
  * of that page. The allow-list below is what a product description legitimately
  * needs and nothing more: no `<script>`, no `<iframe>`, no event handlers, no
- * `style`.
+ * arbitrary `style`. A narrow `font-size` style is allowed because the product
+ * editor exposes a fixed size scale; everything else is stripped.
  *
  * A server component, so the sanitiser stays out of the client bundle entirely
  * - the browser receives already-clean markup.
@@ -34,7 +35,21 @@ const ALLOWED_TAGS = [
   "table", "thead", "tbody", "tfoot", "tr", "th", "td",
 ];
 
-const ALLOWED_ATTR = ["href", "target", "rel", "src", "alt", "title", "width", "height", "colspan", "rowspan"];
+const ALLOWED_ATTR = [
+  "href",
+  "target",
+  "rel",
+  "src",
+  "alt",
+  "title",
+  "width",
+  "height",
+  "colspan",
+  "rowspan",
+  "style",
+];
+
+const ALLOWED_FONT_SIZE = /^(0\.875rem|1rem|1\.125rem|1\.25rem|1\.5rem|1\.875rem)$/;
 
 export function RichText({
   html,
@@ -48,6 +63,7 @@ export function RichText({
     // The allow-list is the same for every tag, so no tag can carry an
     // attribute another one is denied.
     allowedAttributes: { "*": ALLOWED_ATTR },
+    allowedStyles: { "*": { "font-size": [ALLOWED_FONT_SIZE] } },
     // `javascript:` and `data:` hrefs are not links, whatever the tag says.
     allowedSchemes: ["http", "https", "mailto", "tel"],
     allowedSchemesByTag: {},

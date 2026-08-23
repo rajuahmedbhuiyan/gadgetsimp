@@ -23,7 +23,6 @@ import type { AdminProductRow, AdminProductQuery } from "@/lib/api/admin/product
 import { productPermissions } from "@/lib/panel/permissions";
 import { useAuth } from "@/lib/auth/auth-context";
 import {
-  PRODUCTS_PAGE_SIZE,
   useAdminProducts,
   useDeleteProduct,
   useTaxonomy,
@@ -43,7 +42,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Pager } from "@/components/panel/pager";
-import { ProductFilters, PRODUCT_SORTS } from "./product-filters";
+import {
+  ProductFilters,
+  PRODUCT_SORTS,
+  type ProductFilterState,
+} from "./product-filters";
 import { ProductsTable } from "./products-table";
 
 export function ProductsView() {
@@ -51,11 +54,45 @@ export function ProductsView() {
   const { user } = useAuth();
   const permissions = productPermissions(user);
 
-  const [{ q, category, sort, page }, setQuery] = useQueryStates(
+  const [
+    {
+      q,
+      category,
+      brand,
+      status,
+      visibility,
+      type,
+      stock,
+      featured,
+      minPrice,
+      maxPrice,
+      createdFrom,
+      createdTo,
+      updatedFrom,
+      updatedTo,
+      sort,
+      limit,
+      page,
+    },
+    setQuery,
+  ] = useQueryStates(
     {
       q: parseAsString.withDefault(""),
       category: parseAsString.withDefault(""),
+      brand: parseAsString.withDefault(""),
+      status: parseAsString.withDefault(""),
+      visibility: parseAsString.withDefault(""),
+      type: parseAsString.withDefault(""),
+      stock: parseAsString.withDefault(""),
+      featured: parseAsString.withDefault("any"),
+      minPrice: parseAsString.withDefault(""),
+      maxPrice: parseAsString.withDefault(""),
+      createdFrom: parseAsString.withDefault(""),
+      createdTo: parseAsString.withDefault(""),
+      updatedFrom: parseAsString.withDefault(""),
+      updatedTo: parseAsString.withDefault(""),
       sort: parseAsString.withDefault("newest"),
+      limit: parseAsString.withDefault("20"),
       // One-based, because a person reads this one: `?page=3` is the page the
       // table says it is, and page 1 stays off the URL entirely. The API
       // counts from zero, so the translation happens here and nowhere else.
@@ -71,15 +108,70 @@ export function ProductsView() {
 
   const chosen =
     PRODUCT_SORTS.find((option) => option.value === sort) ?? PRODUCT_SORTS[0];
+  const pageSize = pageLimit(limit);
+  const filters: ProductFilterState = {
+    search: q,
+    categoryId: category,
+    brandId: brand,
+    status: productStatus(status),
+    visibility: productVisibility(visibility),
+    productType: productType(type),
+    stockStatus: stockStatus(stock),
+    featured: featured === "yes" || featured === "no" ? featured : "any",
+    minPrice,
+    maxPrice,
+    createdFrom,
+    createdTo,
+    updatedFrom,
+    updatedTo,
+    sort: chosen.value,
+    limit: String(pageSize),
+  };
 
   const query: AdminProductQuery = useMemo(
-    () => ({
-      ...(q ? { search: q } : {}),
-      ...(category ? { categoryId: category } : {}),
-      sort: { field: chosen.field, direction: chosen.direction },
-      pagination: { page: pageIndex, limit: PRODUCTS_PAGE_SIZE },
-    }),
-    [category, chosen.direction, chosen.field, pageIndex, q],
+    () => {
+      const price = priceRange(minPrice, maxPrice);
+
+      return {
+        ...(q ? { search: q } : {}),
+        ...(category ? { categoryId: category } : {}),
+        ...(brand ? { brandId: brand } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.visibility ? { visibility: filters.visibility } : {}),
+        ...(filters.productType ? { productType: filters.productType } : {}),
+        ...(filters.stockStatus ? { stockStatus: filters.stockStatus } : {}),
+        ...(filters.featured !== "any"
+          ? { featured: filters.featured === "yes" }
+          : {}),
+        ...(price ? { price } : {}),
+        ...(createdFrom ? { createdFrom } : {}),
+        ...(createdTo ? { createdTo } : {}),
+        ...(updatedFrom ? { updatedFrom } : {}),
+        ...(updatedTo ? { updatedTo } : {}),
+        sort: { field: chosen.field, direction: chosen.direction },
+        pagination: { page: pageIndex, limit: pageSize },
+      };
+    },
+    [
+      brand,
+      category,
+      chosen.direction,
+      chosen.field,
+      createdFrom,
+      createdTo,
+      filters.featured,
+      filters.productType,
+      filters.status,
+      filters.stockStatus,
+      filters.visibility,
+      maxPrice,
+      minPrice,
+      pageIndex,
+      pageSize,
+      q,
+      updatedFrom,
+      updatedTo,
+    ],
   );
   const queryMarker = useMemo(() => JSON.stringify(query), [query]);
 
@@ -91,7 +183,7 @@ export function ProductsView() {
     useAdminProducts(query);
   // The filter offers every category, parents included - narrowing by a
   // parent expands to its subtree on the API.
-  const { tree } = useTaxonomy();
+  const { tree, brands } = useTaxonomy();
 
   const toggleFeatured = useToggleFeatured(query);
   const remove = useDeleteProduct();
@@ -101,7 +193,56 @@ export function ProductsView() {
   );
 
   // A new filter restarts paging; page 3 of "all" is rarely page 3 of a search.
-  const filtered = Boolean(q || category);
+  const applyFilters = (patch: Partial<ProductFilterState>) => {
+    void setQuery({
+      q: textParam(patch.search ?? filters.search),
+      category: textParam(patch.categoryId ?? filters.categoryId),
+      brand: textParam(patch.brandId ?? filters.brandId),
+      status: textParam(patch.status ?? filters.status),
+      visibility: textParam(patch.visibility ?? filters.visibility),
+      type: textParam(patch.productType ?? filters.productType),
+      stock: textParam(patch.stockStatus ?? filters.stockStatus),
+      featured: patch.featured ?? filters.featured,
+      minPrice: textParam(patch.minPrice ?? filters.minPrice),
+      maxPrice: textParam(patch.maxPrice ?? filters.maxPrice),
+      createdFrom: textParam(patch.createdFrom ?? filters.createdFrom),
+      createdTo: textParam(patch.createdTo ?? filters.createdTo),
+      updatedFrom: textParam(patch.updatedFrom ?? filters.updatedFrom),
+      updatedTo: textParam(patch.updatedTo ?? filters.updatedTo),
+      sort: patch.sort ?? filters.sort,
+      limit: patch.limit ?? filters.limit,
+      page: null,
+    });
+  };
+
+  const clearFilters = () => {
+    void setQuery({
+      q: null,
+      category: null,
+      brand: null,
+      status: null,
+      visibility: null,
+      type: null,
+      stock: null,
+      featured: null,
+      minPrice: null,
+      maxPrice: null,
+      createdFrom: null,
+      createdTo: null,
+      updatedFrom: null,
+      updatedTo: null,
+      sort: null,
+      limit: null,
+      page: null,
+    });
+  };
+
+  const filtered = Object.entries(filters).some(([key, value]) => {
+    if (key === "sort") return value !== "newest";
+    if (key === "limit") return value !== "20";
+    if (key === "featured") return value !== "any";
+    return Boolean(value);
+  });
 
   return (
     <>
@@ -114,7 +255,20 @@ export function ProductsView() {
             title="Products"
             description="Everything in the catalogue, and the way in to editing it."
             action={
-              permissions.create ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => void refetch()}
+                  disabled={isFetching}
+                  className="h-10 cursor-pointer gap-2 rounded-lg text-sm"
+                >
+                  <RefreshCw
+                    className={cn("size-4", isFetching && "animate-spin")}
+                    aria-hidden
+                  />
+                  <span className="max-sm:sr-only">Refresh</span>
+                </Button>
+                {permissions.create ? (
                 <Button
                   className="h-10 cursor-pointer gap-2 rounded-lg text-sm font-semibold"
                   render={<Link href="/admin/products/new" />}
@@ -122,22 +276,18 @@ export function ProductsView() {
                   <Plus className="size-4" aria-hidden />
                   <span className="max-sm:sr-only">New product</span>
                 </Button>
-              ) : null
+                ) : null}
+              </div>
             }
           />
 
           <ProductFilters
-            search={q}
-            onSearchChange={(value) =>
-              void setQuery({ q: value || null, page: null })
-            }
-            categoryId={category}
-            onCategoryChange={(value) =>
-              void setQuery({ category: value || null, page: null })
-            }
-            sort={sort}
-            onSortChange={(value) => void setQuery({ sort: value, page: null })}
+            value={filters}
+            onChange={applyFilters}
+            onClear={clearFilters}
             categories={tree}
+            brands={brands}
+            resultCount={meta?.total ?? null}
           />
         </div>
 
@@ -169,7 +319,7 @@ export function ProductsView() {
             <Empty
               filtered={filtered}
               canCreate={permissions.create}
-              onClear={() => void setQuery({ q: null, category: null, page: null })}
+              onClear={clearFilters}
             />
           ) : (
             <>
@@ -307,6 +457,46 @@ function Failed({ onRetry }: { onRetry: () => void }) {
       </Button>
     </div>
   );
+}
+
+function textParam(value: string) {
+  return value.trim() ? value : null;
+}
+
+function pageLimit(value: string) {
+  const numeric = Number(value);
+  return [20, 50, 100].includes(numeric) ? numeric : 20;
+}
+
+function priceRange(min: string, max: string) {
+  const range: { min?: number; max?: number } = {};
+  const minValue = Number(min);
+  const maxValue = Number(max);
+
+  if (min.trim() && Number.isFinite(minValue)) range.min = minValue;
+  if (max.trim() && Number.isFinite(maxValue)) range.max = maxValue;
+
+  return Object.keys(range).length > 0 ? range : null;
+}
+
+function productStatus(value: string): ProductFilterState["status"] {
+  return value === "DRAFT" || value === "ACTIVE" || value === "OUT_OF_STOCK"
+    ? value
+    : "";
+}
+
+function productVisibility(value: string): ProductFilterState["visibility"] {
+  return value === "PUBLIC" || value === "HIDDEN" ? value : "";
+}
+
+function productType(value: string): ProductFilterState["productType"] {
+  return value === "SIMPLE" || value === "VARIABLE" ? value : "";
+}
+
+function stockStatus(value: string): ProductFilterState["stockStatus"] {
+  return value === "IN_STOCK" || value === "OUT_OF_STOCK" || value === "BACKORDER"
+    ? value
+    : "";
 }
 
 function TableSkeleton() {

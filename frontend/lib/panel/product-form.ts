@@ -39,6 +39,11 @@ export interface SpecGroup {
   options: SpecOption[];
 }
 
+export interface ParsedSpecsResult {
+  groups: SpecGroup[];
+  skipped: number;
+}
+
 export interface ProductFormState {
   // Basics
   name: string;
@@ -261,6 +266,106 @@ export function integerOnly(raw: string): string {
   return raw.replace(/\D/g, "");
 }
 
+export function parsePastedSpecs(
+  raw: string,
+  usedKeys: Iterable<string> = [],
+): ParsedSpecsResult {
+  const taken = new Set(
+    Array.from(usedKeys, (key) => key.trim()).filter(Boolean),
+  );
+  const groups: SpecGroup[] = [];
+  let current: SpecGroup | null = null;
+  let pendingKey: string | null = null;
+  let skipped = 0;
+
+  const ensureGroup = () => {
+    current ??= { title: "General Info", options: [] };
+    if (!groups.includes(current)) groups.push(current);
+    return current;
+  };
+
+  const addOption = (label: string, value: string) => {
+    const key = uniqueSpecKey(specKeyFromLabel(label), taken);
+    ensureGroup().options.push({ key, value: cleanSpecText(value) });
+  };
+
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const line = cleanSpecText(rawLine);
+    if (!line) continue;
+
+    const heading = line.match(/^#{1,6}\s+(.+)$/);
+    if (heading) {
+      if (pendingKey) {
+        skipped += 1;
+        pendingKey = null;
+      }
+      current = { title: cleanSpecText(heading[1]), options: [] };
+      groups.push(current);
+      continue;
+    }
+
+    const colon = line.match(/^([^:]{2,80}):\s*(.+)$/);
+    if (colon) {
+      if (pendingKey) {
+        skipped += 1;
+        pendingKey = null;
+      }
+      addOption(colon[1], colon[2]);
+      continue;
+    }
+
+    if (pendingKey) {
+      addOption(pendingKey, line);
+      pendingKey = null;
+    } else {
+      pendingKey = line;
+    }
+  }
+
+  if (pendingKey) skipped += 1;
+
+  return {
+    groups: groups.filter((group) => group.title.trim() && group.options.length > 0),
+    skipped,
+  };
+}
+
+function cleanSpecText(value: string): string {
+  return value
+    .trim()
+    .replace(/^[-*]\s+/, "")
+    .replace(/\*\*/g, "")
+    .replace(/__/g, "")
+    .replace(/`/g, "")
+    .trim();
+}
+
+function specKeyFromLabel(label: string): string {
+  const key = label
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+
+  if (!key) return "attribute";
+  return /^[a-z]/.test(key) ? key : `attribute_${key}`;
+}
+
+function uniqueSpecKey(base: string, taken: Set<string>): string {
+  let key = base;
+  let index = 2;
+
+  while (taken.has(key)) {
+    key = `${base}_${index}`;
+    index += 1;
+  }
+
+  taken.add(key);
+  return key;
+}
+
 /**
  * Shape a slug as it is typed.
  *
@@ -402,7 +507,6 @@ const ATTRIBUTE_KEY = /^[a-z][a-z0-9_]*$/;
 
 function isUrl(value: string) {
   try {
-    // eslint-disable-next-line no-new
     new URL(value);
     return true;
   } catch {

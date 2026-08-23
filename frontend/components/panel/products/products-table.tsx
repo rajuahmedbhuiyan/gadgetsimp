@@ -8,10 +8,9 @@
  * readable. So the same rows render as cards on a phone and as a table on a
  * desktop, from one set of data and one set of handlers.
  *
- * There is no status column. `POST /products/filter` returns the public
- * catalogue and its projection carries no `status` or `visibility`, so a badge
- * here would be invented rather than reported. What the row *can* say
- * truthfully is stock and whether it is featured.
+ * The admin filter endpoint now returns lifecycle fields, but this table keeps
+ * the visible columns focused on the repeated actions staff use most: editing,
+ * copying ids/SKUs, stock and featured state.
  */
 
 import { useEffect, useState } from "react";

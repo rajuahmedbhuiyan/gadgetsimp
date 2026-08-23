@@ -32,6 +32,10 @@ import {
 import { clearGuestCart } from "@/lib/cart/guest-cart";
 import { saveConfirmation } from "@/lib/checkout/confirmation";
 import {
+  readCheckoutAddress,
+  saveCheckoutAddress,
+} from "@/lib/checkout/saved-address";
+import {
   checkoutSchema,
   type CheckoutData,
   type CheckoutValues,
@@ -114,6 +118,7 @@ export function CheckoutForm({
     control,
     register,
     handleSubmit,
+    getValues,
     setValue,
     formState: { errors, isSubmitting },
   } = form;
@@ -121,6 +126,28 @@ export function CheckoutForm({
   const district = useWatch({ control, name: "district" }) ?? "";
   const createAccount = useWatch({ control, name: "createAccount" }) ?? false;
   const deliveryFee = deliveryFeeFor(district);
+
+  const savedAddressPrefilled = useRef(false);
+  useEffect(() => {
+    if (savedAddressPrefilled.current) return;
+    savedAddressPrefilled.current = true;
+
+    const saved = readCheckoutAddress();
+    if (!saved) return;
+
+    const current = getValues();
+    if (saved.fullName && !current.fullName) setValue("fullName", saved.fullName);
+    if (saved.phone && !current.phone) setValue("phone", normaliseMobile(saved.phone));
+    if (saved.address.line1 && !current.line1) setValue("line1", saved.address.line1);
+    if (saved.address.line2 && !current.line2) setValue("line2", saved.address.line2);
+    if (saved.address.city && !current.city) setValue("city", saved.address.city);
+    if (!current.district) {
+      setValue("district", saved.address.district ?? DEFAULT_DISTRICT);
+    }
+    if (saved.address.area && !current.upazila) setValue("upazila", saved.address.area);
+
+    if (saved.address.district) onDistrictChange(saved.address.district);
+  }, [getValues, onDistrictChange, setValue]);
 
   /**
    * Prefill from the signed-in account.
@@ -184,6 +211,12 @@ export function CheckoutForm({
 
     try {
       const response = await ordersApi.place(payload);
+
+      saveCheckoutAddress({
+        fullName: values.fullName,
+        phone: values.phone,
+        address: payload.shippingAddress,
+      });
 
       saveConfirmation({
         order: response.data.order,
