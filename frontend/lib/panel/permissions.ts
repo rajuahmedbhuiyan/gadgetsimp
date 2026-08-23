@@ -109,3 +109,26 @@ export function userPermissions(
     destroy: owner,
   };
 }
+
+/* --------------------------------- brands -------------------------------- */
+
+export interface BrandPermissions {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  remove: boolean;
+}
+
+export function brandPermissions(
+  user: Pick<User, "role"> | null | undefined,
+): BrandPermissions {
+  const staff = hasRole(user, "ROLE_MODERATOR");
+  const admin = hasRole(user, "ROLE_ADMIN");
+
+  return {
+    view: staff,
+    create: admin,
+    edit: admin,
+    remove: admin,
+  };
+}
