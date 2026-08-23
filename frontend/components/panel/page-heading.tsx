@@ -17,7 +17,7 @@ export function PanelPageHeading({
   action?: ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-3">
+    <header className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <h1 className="font-heading text-xl font-bold tracking-tight sm:text-2xl">
           {title}

@@ -23,6 +23,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import type { AdminProductRow, AdminProductQuery } from "@/lib/api/admin/products";
+import type { PaginationMeta } from "@/lib/api/types";
 import { productPermissions } from "@/lib/panel/permissions";
 import { useAuth } from "@/lib/auth/auth-context";
 import {
@@ -45,6 +46,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+} from "@/components/ui/pagination";
 import { ProductFilters, PRODUCT_SORTS } from "./product-filters";
 import { ProductsTable } from "./products-table";
 
@@ -57,10 +64,18 @@ export function ProductsView() {
       q: parseAsString.withDefault(""),
       category: parseAsString.withDefault(""),
       sort: parseAsString.withDefault("newest"),
-      page: parseAsInteger.withDefault(0),
+      // One-based, because a person reads this one: `?page=3` is the page the
+      // table says it is, and page 1 stays off the URL entirely. The API
+      // counts from zero, so the translation happens here and nowhere else.
+      page: parseAsInteger.withDefault(1),
     },
     { history: "replace", shallow: true, clearOnDefault: true },
   );
+
+  // `?page=0`, `?page=-2` and `?page=banana` are all reachable by hand and
+  // none of them are a page; each should land on the first one rather than
+  // put a negative offset on the wire.
+  const pageIndex = Math.max(1, page) - 1;
 
   const chosen =
     PRODUCT_SORTS.find((option) => option.value === sort) ?? PRODUCT_SORTS[0];
@@ -69,7 +84,7 @@ export function ProductsView() {
     ...(q ? { search: q } : {}),
     ...(category ? { categoryId: category } : {}),
     sort: { field: chosen.field, direction: chosen.direction },
-    pagination: { page, limit: PRODUCTS_PAGE_SIZE },
+    pagination: { page: pageIndex, limit: PRODUCTS_PAGE_SIZE },
   };
 
   const { products, meta, isLoading, isFetching, isError, refetch } =
@@ -106,7 +121,7 @@ export function ProductsView() {
         }
       />
 
-      <div className="mt-6 flex flex-col gap-4">
+      <div className="flex flex-col gap-4">
         <ProductFilters
           search={q}
           onSearchChange={(value) =>
@@ -163,32 +178,11 @@ export function ProductsView() {
             />
 
             {meta && meta.totalPages > 1 ? (
-              <div className="flex items-center justify-between gap-4">
-                <Button
-                  variant="outline"
-                  disabled={!meta.hasPrevPage}
-                  onClick={() => void setQuery({ page: page - 1 })}
-                  className="h-10 cursor-pointer gap-1.5 rounded-lg px-3 text-sm"
-                >
-                  <ChevronLeft className="size-4" aria-hidden />
-                  <span className="max-sm:sr-only">Previous</span>
-                </Button>
-
-                <span className="text-sm text-muted-foreground tabular-nums">
-                  Page {meta.page + 1} of {meta.totalPages}
-                  <span className="max-sm:hidden"> · {meta.total} products</span>
-                </span>
-
-                <Button
-                  variant="outline"
-                  disabled={!meta.hasNextPage}
-                  onClick={() => void setQuery({ page: page + 1 })}
-                  className="h-10 cursor-pointer gap-1.5 rounded-lg px-3 text-sm"
-                >
-                  <span className="max-sm:sr-only">Next</span>
-                  <ChevronRight className="size-4" aria-hidden />
-                </Button>
-              </div>
+              <Pager
+                meta={meta}
+                shown={products.length}
+                onPageChange={(next) => void setQuery({ page: next + 1 })}
+              />
             ) : null}
           </>
         )}
@@ -226,6 +220,111 @@ export function ProductsView() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+/*
+ * Seven slots, always: the first page, the last page, a window around the
+ * current one, and an ellipsis wherever pages are skipped. The count is fixed
+ * so the row keeps its width - page 9 does not slide out from under the
+ * cursor that was aimed at page 8.
+ *
+ * Pages are zero-based here, as they are on the API; only the labels add one.
+ */
+const PAGER_SLOTS = 7;
+
+function pagerItems(current: number, total: number): Array<number | "gap"> {
+  if (total <= PAGER_SLOTS) {
+    return Array.from({ length: total }, (_, index) => index);
+  }
+
+  const last = total - 1;
+
+  // Near either end there is nothing to elide on that side, so the window
+  // opens out instead and the single ellipsis moves to the far side.
+  if (current <= 3) return [0, 1, 2, 3, 4, "gap", last];
+  if (current >= last - 3) {
+    return [0, "gap", last - 4, last - 3, last - 2, last - 1, last];
+  }
+
+  return [0, "gap", current - 1, current, current + 1, "gap", last];
+}
+
+/**
+ * Paging by number rather than by step.
+ *
+ * The buttons are buttons, not links: a page change here is the same shallow
+ * URL write as every filter above it, so there is no navigation for an anchor
+ * to describe.
+ */
+function Pager({
+  meta,
+  shown,
+  onPageChange,
+}: {
+  meta: PaginationMeta;
+  shown: number;
+  onPageChange: (page: number) => void;
+}) {
+  const first = meta.page * meta.limit + 1;
+
+  return (
+    <div className="flex flex-col-reverse items-center justify-between gap-3 sm:flex-row">
+      <p className="text-sm text-muted-foreground tabular-nums">
+        {first}–{first + shown - 1} of {meta.total} products
+      </p>
+
+      <Pagination className="mx-0 w-auto justify-center sm:justify-end">
+        <PaginationContent className="gap-1 sm:gap-1.5">
+          <PaginationItem>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Previous page"
+              disabled={!meta.hasPrevPage}
+              onClick={() => onPageChange(meta.page - 1)}
+              className="size-9 cursor-pointer rounded-lg sm:size-10"
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+            </Button>
+          </PaginationItem>
+
+          {pagerItems(meta.page, meta.totalPages).map((item, index) =>
+            item === "gap" ? (
+              <PaginationItem key={`gap-${index}`}>
+                <PaginationEllipsis className="size-9 sm:size-10" />
+              </PaginationItem>
+            ) : (
+              <PaginationItem key={item}>
+                <Button
+                  variant={item === meta.page ? "default" : "ghost"}
+                  size="icon"
+                  aria-label={`Page ${item + 1}`}
+                  aria-current={item === meta.page ? "page" : undefined}
+                  onClick={() => onPageChange(item)}
+                  className="size-9 cursor-pointer rounded-lg text-sm font-medium tabular-nums sm:size-10"
+                >
+                  {item + 1}
+                </Button>
+              </PaginationItem>
+            ),
+          )}
+
+          <PaginationItem>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Next page"
+              disabled={!meta.hasNextPage}
+              onClick={() => onPageChange(meta.page + 1)}
+              className="size-9 cursor-pointer rounded-lg sm:size-10"
+            >
+              <ChevronRight className="size-4" aria-hidden />
+            </Button>
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
   );
 }
 
