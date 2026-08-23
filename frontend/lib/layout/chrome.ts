@@ -10,8 +10,13 @@
  * Exact matches only. `/shop/[slug]` is a product page - an ordinary shop
  * window - and keeps everything.
  */
-const BARE_CHROME = new Set(["/shop"]);
+const BARE_CHROME = new Set(["/shop", "/checkout", "/checkout/success"]);
 
 export function hasBareChrome(pathname: string): boolean {
   return BARE_CHROME.has(pathname);
+}
+
+export function hasMobileTabChrome(pathname: string): boolean {
+  if (hasBareChrome(pathname)) return false;
+  return !pathname.startsWith("/shop/");
 }

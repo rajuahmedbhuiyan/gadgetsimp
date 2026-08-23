@@ -321,6 +321,12 @@ export function getHomeCategories(limit = 12) {
   });
 }
 
+export function getAllCategories(limit = 100) {
+  return getCategories({
+    pagination: { page: 0, limit },
+  });
+}
+
 /**
  * Other products from the same category.
  *

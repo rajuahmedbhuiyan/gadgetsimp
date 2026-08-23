@@ -45,7 +45,9 @@ export default function StorefrontLayout({
       </main>
 
       <SiteFooter />
-      <MobileTabBar />
+      <ChromeGate>
+        <MobileTabBar />
+      </ChromeGate>
       <ChromeGate>
         <WhatsAppFab />
       </ChromeGate>

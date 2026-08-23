@@ -233,6 +233,67 @@ export function PurchasePanel({
           <Meta label="Brand" value={product.brandId.name} />
         ) : null}
       </dl>
+
+      <MobilePurchaseBar
+        isPending={isPending}
+        isSuccess={isSuccess}
+        purchasable={purchasable}
+        isVariable={isVariable}
+        selected={selected}
+        onAddToCart={() => void addToCart()}
+        onBuyNow={() => void buyNow()}
+      />
+    </div>
+  );
+}
+
+function MobilePurchaseBar({
+  isPending,
+  isSuccess,
+  purchasable,
+  isVariable,
+  selected,
+  onAddToCart,
+  onBuyNow,
+}: {
+  isPending: boolean;
+  isSuccess: boolean;
+  purchasable: boolean;
+  isVariable: boolean;
+  selected: Variation | null;
+  onAddToCart: () => void;
+  onBuyNow: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgb(0_0_0/0.08)] supports-backdrop-filter:bg-background/80 supports-backdrop-filter:backdrop-blur-lg lg:hidden">
+      <div className="mx-auto grid max-w-lg grid-cols-2 gap-3">
+        <Button
+          className="h-11 cursor-pointer gap-2 rounded-field text-sm font-semibold"
+          disabled={!purchasable || isPending}
+          onClick={onAddToCart}
+        >
+          {isPending ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : isSuccess ? (
+            <Check className="size-4" aria-hidden />
+          ) : (
+            <ShoppingCart className="size-4" aria-hidden />
+          )}
+          <span className="truncate">
+            {addLabel({ isPending, isSuccess, purchasable, isVariable, selected })}
+          </span>
+        </Button>
+
+        <Button
+          variant="outline"
+          className="h-11 cursor-pointer gap-2 rounded-field text-sm font-semibold hover:border-brand/50 hover:bg-brand/10"
+          disabled={!purchasable || isPending}
+          onClick={onBuyNow}
+        >
+          <Zap className="size-4" aria-hidden />
+          Buy now
+        </Button>
+      </div>
     </div>
   );
 }

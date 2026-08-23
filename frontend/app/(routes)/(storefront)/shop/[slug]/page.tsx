@@ -90,7 +90,7 @@ export default async function ProductPage(props: PageProps<"/shop/[slug]">) {
   if (!product) notFound();
 
   return (
-    <div className={`${container} py-6 lg:py-10`}>
+    <div className={`${container} pt-6 pb-28 lg:py-10`}>
       <ProductBreadcrumb
         category={product.categoryIds[0]}
         productName={product.name}

@@ -17,6 +17,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 
 import { cn } from "@/lib/utils";
+import { hasMobileTabChrome } from "@/lib/layout/chrome";
 import { mobileTabs } from "@/lib/config/site";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCartCount } from "@/hooks/use-cart-count";
@@ -26,6 +27,8 @@ export function MobileTabBar() {
   const pathname = usePathname();
   const { user } = useAuth();
   const { count } = useCartCount();
+
+  if (!hasMobileTabChrome(pathname)) return null;
 
   return (
     <nav
