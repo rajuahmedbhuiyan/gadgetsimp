@@ -54,10 +54,6 @@ async function validateBrand(brandId) {
   if (!exists) throw ApiError.unprocessable("Brand does not exist", { code: "PRODUCT_BRAND_INVALID" });
 }
 
-function hasValue(value) {
-  return value !== undefined && value !== null && value !== "";
-}
-
 function optionValues() { return new Set(); }
 
 function validateValue(attribute, value, field) {
@@ -78,75 +74,6 @@ function validateValue(attribute, value, field) {
       code: "PRODUCT_ATTRIBUTE_VALUE_INVALID",
       errors: [{ field, message: "Expected a number" }],
     });
-  }
-}
-
-/**
- * Flattens the grouped attributes into the key/value pairs the category rules
- * are expressed in, keeping each one's position so an error can point at the
- * exact group it came from.
- *
- * Accepts either a hydrated document's groups (where `options` is a Mongoose
- * Map) or a validated request body's (where it is a plain object), so callers
- * do not have to convert before validating.
- */
-function attributeEntries(groups) {
-  const entries = [];
-
-  for (const [index, group] of (groups ?? []).entries()) {
-    const options =
-      group?.options instanceof Map ? Object.fromEntries(group.options) : group?.options ?? {};
-
-    for (const [key, value] of Object.entries(options)) {
-      entries.push({ key, value, field: `attributes.${index}.options.${key}` });
-    }
-  }
-
-  return entries;
-}
-
-function validateProductAttributes(context, groups, entityValues) {
-  const entries = attributeEntries(groups);
-
-  // Grouping is presentation; the category rules below are about which keys
-  // exist and what they hold, so they run against the flattened view.
-  const values = new Map(entries.map((entry) => [entry.key, entry.value]));
-
-  for (const { key, value, field } of entries) {
-    const metadata = context.byKey.get(key);
-    if (!metadata || metadata.source !== ATTRIBUTE_SOURCE.PRODUCT) {
-      throw ApiError.unprocessable(`Attribute '${key}' is not a product attribute for this category`, {
-        code: "PRODUCT_ATTRIBUTE_INVALID",
-        errors: [{ field, message: "Attribute is not assigned to the category" }],
-      });
-    }
-    validateValue(metadata, value, field);
-  }
-
-  for (const metadata of context.attributes) {
-    if (!metadata.categoryConfiguration.required) continue;
-    if (metadata.source === ATTRIBUTE_SOURCE.PRODUCT && !hasValue(values.get(metadata.key))) {
-      throw ApiError.unprocessable(`${metadata.name} is required`, {
-        code: "PRODUCT_ATTRIBUTE_REQUIRED",
-        errors: [
-          {
-            // No index to point at - the key is missing from every group, so
-            // the field is the collection and the message names what is absent.
-            field: "attributes",
-            message: `'${metadata.key}' is required by the category and is not set in any group`,
-          },
-        ],
-      });
-    }
-    if (metadata.source === ATTRIBUTE_SOURCE.ENTITY) {
-      const field = `${metadata.key}Id`;
-      if (!field || !hasValue(entityValues[field])) {
-        throw ApiError.unprocessable(`${metadata.name} is required`, {
-          code: "PRODUCT_ATTRIBUTE_REQUIRED",
-          errors: [{ field: field ?? metadata.key, message: "Required by the category" }],
-        });
-      }
-    }
   }
 }
 
@@ -267,7 +194,6 @@ async function presentProduct(product, variations) {
 async function create(input, actor) {
   const context = await categoryContext(input.categoryIds);
   await validateBrand(input.brandId);
-  validateProductAttributes(context, input.attributes, input);
   const productType = validateProductType(input);
   const submittedVariations = input.variations
     ? validateSubmittedVariations(context, input.variations)
@@ -321,10 +247,7 @@ async function update(id, input, actor) {
 
   const categoryIds = input.categoryIds ?? current.categoryIds;
   const context = await categoryContext(categoryIds);
-  const attributes = input.attributes ?? current.attributes;
-  const entityValues = { brandId: input.brandId ?? current.brandId };
-  await validateBrand(entityValues.brandId);
-  validateProductAttributes(context, attributes, entityValues);
+  await validateBrand(input.brandId ?? current.brandId);
   if (input.variationOptions) variationCombinations(context, input.variationOptions);
 
   await withTransaction(async (session) => {
@@ -354,10 +277,10 @@ async function update(id, input, actor) {
  *      `originalPrice >= sellingPrice`, and the other half of that comparison
  *      is in the database. A patch validated in isolation would happily leave
  *      a product priced above its own "was" price.
- *   2. **Attributes are revalidated whenever either side moves.** Changing
- *      categories can invalidate attributes that were fine a moment ago, and
- *      changing attributes has to be checked against the categories already
- *      stored.
+ *   2. **References are resolved against the merged record.** A patch that
+ *      moves `categoryIds` or `brandId` has to prove the new target exists,
+ *      and one that leaves a field alone still carries the stored value into
+ *      the check.
  *   3. **`publishedAt` stays derived.** It follows `status` here exactly as it
  *      does on create and full update.
  *
@@ -378,14 +301,10 @@ async function patchSection(id, section, input, actor) {
   }
 
   if (section === "general") {
-    // Either side of the category/attribute relationship may be moving, so
-    // resolve both from the merged view before validating.
-    const categoryIds = input.categoryIds ?? current.categoryIds;
-    const context = await categoryContext(categoryIds);
-    const brandId = "brandId" in input ? input.brandId : current.brandId;
-
-    await validateBrand(brandId);
-    validateProductAttributes(context, current.attributes, { brandId });
+    // Both references are checked against the merged view: a patch may move
+    // either one, and each has to point at a record that still exists.
+    await categoryContext(input.categoryIds ?? current.categoryIds);
+    await validateBrand("brandId" in input ? input.brandId : current.brandId);
   }
 
   if (section === "pricing") {
@@ -405,12 +324,6 @@ async function patchSection(id, section, input, actor) {
         ],
       });
     }
-  }
-
-  if (section === "attributes") {
-    const context = await categoryContext(current.categoryIds);
-    const attributes = input.attributes ?? current.attributes;
-    validateProductAttributes(context, attributes, { brandId: current.brandId });
   }
 
   if (section === "seo") {

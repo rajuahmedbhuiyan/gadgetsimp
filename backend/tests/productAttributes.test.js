@@ -179,34 +179,41 @@ describe("what the validator refuses", () => {
   });
 });
 
-describe("category rules still apply across groups", () => {
-  it("rejects a key the category does not configure, naming its group", async () => {
+/**
+ * Attribute keys are deliberately free-form: a product may carry a spec the
+ * category has never heard of. The `Attribute` collection governs what is
+ * *filterable*, not what is storable, so these two cases are stored verbatim
+ * rather than rejected.
+ */
+describe("keys are not bound to the category configuration", () => {
+  it("stores a key the category does not configure", async () => {
     const { category } = await fixture();
 
-    await expect(
-      createProduct({
-        category,
-        attributes: [
-          { title: "General Info", options: { material: "cotton" } },
-          { title: "Extras", options: { bogus: "x" } },
-        ],
-      })
-    ).rejects.toMatchObject({
-      code: "PRODUCT_ATTRIBUTE_INVALID",
-      // The error points at the group the offending key actually came from.
-      errors: [{ field: "attributes.1.options.bogus" }],
+    const product = await createProduct({
+      category,
+      attributes: [
+        { title: "General Info", options: { material: "cotton" } },
+        { title: "Extras", options: { bogus: "x" } },
+      ],
     });
+
+    expect(product.attributes).toMatchObject([
+      { title: "General Info", options: { material: "cotton" } },
+      { title: "Extras", options: { bogus: "x" } },
+    ]);
   });
 
-  it("rejects a variant-source attribute used as a product spec", async () => {
+  it("stores a variant-source attribute used as a product spec", async () => {
     const { category } = await fixture();
 
-    await expect(
-      createProduct({
-        category,
-        attributes: [{ title: "General Info", options: { color: "black" } }],
-      })
-    ).rejects.toMatchObject({ code: "PRODUCT_ATTRIBUTE_INVALID" });
+    const product = await createProduct({
+      category,
+      attributes: [{ title: "General Info", options: { color: "black" } }],
+    });
+
+    expect(product.attributes).toMatchObject([
+      { title: "General Info", options: { color: "black" } },
+    ]);
   });
 });
 

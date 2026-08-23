@@ -336,9 +336,10 @@
  *     tags: [Products]
  *     summary: Update attributes and tags
  *     description: >
- *       Attributes are revalidated against the categories already on the
- *       product, so a key the category does not configure is rejected with
- *       `PRODUCT_ATTRIBUTE_INVALID`.
+ *       Attribute keys are free-form: a key does not have to be registered on
+ *       the product's categories. Only keys configured on a category are
+ *       reachable from catalog filters, though - anything else is stored and
+ *       displayed but not filterable.
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { $ref: '#/components/schemas/CatalogId' } }
  *     requestBody:

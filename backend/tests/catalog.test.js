@@ -392,17 +392,21 @@ describe("product section patches", () => {
     expect((await Product.findById(product.id).lean()).publishedAt).toBeNull();
   });
 
-  it("rejects an attribute the category does not configure", async () => {
+  it("stores an attribute the category does not configure", async () => {
     const { product } = await seedProduct();
 
-    await expect(
-      productService.patchSection(
-        product.id,
-        "attributes",
-        { attributes: [{ title: "General Info", options: { bogus: "x" } }] },
-        actor
-      )
-    ).rejects.toMatchObject({ code: "PRODUCT_ATTRIBUTE_INVALID" });
+    // Keys are free-form; the category's attribute list governs filterability,
+    // not what a product is allowed to store.
+    const patched = await productService.patchSection(
+      product.id,
+      "attributes",
+      { attributes: [{ title: "General Info", options: { bogus: "x" } }] },
+      actor
+    );
+
+    expect(patched.attributes).toMatchObject([
+      { title: "General Info", options: { bogus: "x" } },
+    ]);
   });
 
   it("updates tags without disturbing attributes", async () => {

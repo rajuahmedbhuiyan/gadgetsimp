@@ -175,9 +175,9 @@ const updateProduct = {
  * empty patch is always a client bug.
  *
  * Cross-field rules that span sections - `originalPrice >= sellingPrice`, or
- * attributes being valid for the category - cannot be checked here, because
- * the other half of the comparison lives in the database. The service does
- * those against the *merged* record.
+ * a `categoryIds`/`brandId` reference pointing at a record that exists -
+ * cannot be checked here, because the other half of the comparison lives in
+ * the database. The service does those against the *merged* record.
  */
 const atLeastOneField = (body) => Object.keys(body).length > 0;
 const notEmpty = { message: "Provide at least one field to update" };
