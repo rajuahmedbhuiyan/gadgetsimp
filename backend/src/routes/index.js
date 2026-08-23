@@ -16,6 +16,7 @@ const orderRoutes = require("../modules/order/order.routes");
 const orderAdminRoutes = require("../modules/order/order.admin.routes");
 const productPublicRoutes = require("../modules/product-public/product-public.routes");
 const variationRoutes = require("../modules/variation/variation.routes");
+const dashboardRoutes = require("../modules/dashboard/dashboard.routes");
 const { sendResponse } = require("../shared/sendResponse");
 
 const router = express.Router();
@@ -43,6 +44,7 @@ const modules = [
   // Staff order management, on its own prefix rather than nested under
   // `/orders`, so the customer routes and the ones that reach every order in
   // the system cannot be confused for each other at a glance.
+  { path: "/admin/dashboard", router: dashboardRoutes },
   { path: "/admin/orders", router: orderAdminRoutes },
   { path: "/variations", router: variationRoutes },
 ];
