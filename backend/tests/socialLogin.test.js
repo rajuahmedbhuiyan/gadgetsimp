@@ -209,14 +209,23 @@ describe.each([
     expect(login.status).toBe(200);
   });
 
-  it("explains itself when the provider shares no email", async () => {
+  it("handles a provider that shares no email", async () => {
     stub(withoutEmail(`${type}-400`));
 
     const response = await request(app).post(SOCIAL).send({ type, token: TOKEN });
 
-    expect(response.status).toBe(400);
-    expect(response.body.code).toBe("SOCIAL_EMAIL_MISSING");
-    expect(await User.countDocuments({})).toBe(0);
+    if (type === "FACEBOOK") {
+      expect(response.status).toBe(200);
+      expect(response.body.data.user.email).toBe(
+        "facebook-facebook400@social.local.gadgetsimp"
+      );
+      expect(response.body.data.user.emailVerifiedAt).toBeNull();
+      expect(await User.countDocuments({})).toBe(1);
+    } else {
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe("SOCIAL_EMAIL_MISSING");
+      expect(await User.countDocuments({})).toBe(0);
+    }
   });
 
   it("refuses a deactivated account", async () => {

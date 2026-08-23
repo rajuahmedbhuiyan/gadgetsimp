@@ -62,6 +62,23 @@ describe("tests can never send real email", () => {
     expect(mailer.getSentMessages().some((message) => message.to === email)).toBe(true);
   });
 
+  it("never sends mail to internal social placeholder emails", async () => {
+    const result = await mailer.sendMail({
+      to: "facebook-123@social.local.gadgetsimp",
+      subject: "x",
+      text: "x",
+      html: "<p>x</p>",
+    });
+
+    expect(result).toEqual({
+      skipped: true,
+      reason: "INTERNAL_PLACEHOLDER_EMAIL",
+    });
+    expect(mailer.getSentMessages()).not.toContainEqual(
+      expect.objectContaining({ to: "facebook-123@social.local.gadgetsimp" })
+    );
+  });
+
   it("keeps the guard in the mailer itself, not only in tests/setup.js", () => {
     // setup.js forces MAIL_PROVIDER=log, but a stray script that loads the
     // mailer directly would bypass that. `env.isTest` is the backstop.

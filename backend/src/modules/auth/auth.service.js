@@ -43,6 +43,7 @@ const { getProvider } = require("./providers");
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_RESENDS = 5;
+const SOCIAL_PLACEHOLDER_EMAIL_DOMAIN = "social.local.gadgetsimp";
 
 /**
  * Step 1 of signup: record the details, email a token. No account yet.
@@ -417,21 +418,13 @@ async function socialLogin(type, token, context = {}) {
     return issueSession(byProviderId, context);
   }
 
-  // A provider does not always release an email - a Facebook user may have
-  // registered by phone, or declined the permission. Without one there is no
-  // way to link or contact the account, so fall back to email signup.
-  if (!profile.email) {
-    throw ApiError.badRequest(
-      `${titleCase(type)} did not share an email address with us. Please grant email permission, or sign up with your email instead.`,
-      { code: "SOCIAL_EMAIL_MISSING" }
-    );
-  }
+  const profileEmail = profile.email ?? fallbackSocialEmail(profile);
 
   // 2. Existing account for the same email. Password accounts stay strictly
   // email/password accounts; possession of a matching Google/Facebook email
   // must not silently add a new sign-in method. Social-only accounts may link
   // another social provider, preserving the one-user-per-email constraint.
-  const byEmail = await User.findOne({ email: profile.email }).select(
+  const byEmail = await User.findOne({ email: profileEmail }).select(
     "+tokenVersion +sessions +socialAccounts"
   );
 
@@ -451,7 +444,7 @@ async function socialLogin(type, token, context = {}) {
 
     // Signing in through a provider proves the address, so an account that
     // never completed email verification is confirmed by this.
-    byEmail.emailVerifiedAt ??= new Date();
+    if (profile.email) byEmail.emailVerifiedAt ??= new Date();
     byEmail.image ??= profile.avatarUrl ?? undefined;
     byEmail.lastLoginAt = new Date();
 
@@ -466,23 +459,41 @@ async function socialLogin(type, token, context = {}) {
   // 3. Brand new account. No password, and no verification email.
   const user = await User.create({
     fullName: profile.fullName,
-    email: profile.email,
+    email: profileEmail,
     socialAccounts: [{ provider: profile.provider, providerId: profile.providerId }],
     authProviders: [profile.provider],
     image: profile.avatarUrl ?? undefined,
-    emailVerifiedAt: new Date(),
+    emailVerifiedAt: profile.email ? new Date() : null,
     lastLoginAt: new Date(),
   });
 
   // A pending email signup for the same address is now redundant.
-  await PendingRegistration.deleteOne({ email: profile.email });
+  if (profile.email) await PendingRegistration.deleteOne({ email: profile.email });
 
   // Same follow-up as any other new account, including claiming guest orders:
   // the provider verified this address, which is the same bar the email flow
   // clears before it claims anything.
-  await afterAccountCreated(user);
+  if (profile.email) await afterAccountCreated(user);
 
   return issueSession(user, context);
+}
+
+function fallbackSocialEmail(profile) {
+  if (profile.provider !== AUTH_PROVIDERS.FACEBOOK) {
+    const reason =
+      profile.emailMissingReason === "account"
+        ? `${titleCase(profile.provider)} did not return an email address for this account. Add or verify an email, or sign up with your email instead.`
+        : `${titleCase(profile.provider)} did not share an email address with us. Please grant email permission, or sign up with your email instead.`;
+
+    throw ApiError.badRequest(reason, { code: "SOCIAL_EMAIL_MISSING" });
+  }
+
+  const providerId = String(profile.providerId)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 120);
+
+  return `facebook-${providerId}@${SOCIAL_PLACEHOLDER_EMAIL_DOMAIN}`;
 }
 
 /**

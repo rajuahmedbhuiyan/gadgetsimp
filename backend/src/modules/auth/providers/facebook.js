@@ -58,7 +58,7 @@ async function graphFetch(url) {
  * Verifies a Facebook user access token and returns a normalised profile.
  *
  * @param {string} token User access token from the Facebook SDK.
- * @returns {Promise<{provider: string, providerId: string, email: string|null, fullName: string, avatarUrl: string|null}>}
+ * @returns {Promise<{provider: string, providerId: string, email: string|null, emailMissingReason: "permission"|"account"|null, fullName: string, avatarUrl: string|null}>}
  */
 async function verifyToken(token) {
   const debug = await graphFetch(
@@ -92,6 +92,9 @@ async function verifyToken(token) {
     });
   }
 
+  const scopes = Array.isArray(data.scopes) ? data.scopes.map(String) : [];
+  const hasEmailScope = scopes.includes("email");
+
   const profile = await graphFetch(
     `${GRAPH}/me?fields=id,name,first_name,last_name,email,picture.width(256)` +
       `&access_token=${encodeURIComponent(token)}`
@@ -105,12 +108,24 @@ async function verifyToken(token) {
     });
   }
 
+  if (!profile.email) {
+    logger.info(
+      {
+        hasEmailScope,
+        facebookScopes: scopes,
+        facebookUserId: profile.id,
+      },
+      "Facebook profile did not include an email address"
+    );
+  }
+
   return {
     provider,
     providerId: String(profile.id),
     // Absent when the user registered with a phone number, or declined the
     // email permission. The caller decides what to do about that.
     email: profile.email ? String(profile.email).toLowerCase().trim() : null,
+    emailMissingReason: profile.email ? null : hasEmailScope ? "account" : "permission",
     // `name` is the display name Facebook itself shows, so it is preferred
     // over re-joining the parts. The pair is the fallback, and a placeholder
     // after that, since the field is required.

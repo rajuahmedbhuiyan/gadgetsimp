@@ -34,6 +34,7 @@ const sentMessages = [];
 // per-process and resets on restart, so treat it as an early-warning signal
 // rather than an accurate ledger - the provider's own count is authoritative.
 let quota = { date: today(), sent: 0 };
+const INTERNAL_EMAIL_DOMAINS = new Set(["social.local.gadgetsimp"]);
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -106,6 +107,11 @@ function parseMailFrom(value) {
   }
 
   return { email: String(value).trim() };
+}
+
+function isInternalEmail(value) {
+  const domain = String(value).trim().toLowerCase().split("@").at(1);
+  return Boolean(domain && INTERNAL_EMAIL_DOMAINS.has(domain));
 }
 
 async function brevoRequest(path, options = {}) {
@@ -268,6 +274,11 @@ function asDeliveryError(error) {
  * @param {{to: string, subject: string, html: string, text: string}} message
  */
 async function sendMail({ to, subject, html, text }) {
+  if (isInternalEmail(to)) {
+    logger.info({ to, subject }, "Email skipped for internal placeholder address");
+    return { skipped: true, reason: "INTERNAL_PLACEHOLDER_EMAIL" };
+  }
+
   let info;
 
   try {
@@ -318,6 +329,7 @@ module.exports = {
   verifyMailer,
   closeMailer,
   isLogTransport,
+  isInternalEmail,
   getSentMessages,
   clearSentMessages,
 };
