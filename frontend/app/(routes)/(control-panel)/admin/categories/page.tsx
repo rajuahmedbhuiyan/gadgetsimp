@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { PanelPlaceholder } from "@/components/panel/panel-placeholder";
+import { CategoriesView } from "@/components/panel/categories/categories-view";
 
 export const metadata: Metadata = { title: "Categories" };
 
 export default function AdminCategoriesPage() {
-  return <PanelPlaceholder href="/admin/categories" />;
+  return <CategoriesView />;
 }

@@ -149,3 +149,21 @@ export function attributePermissions(
 
   return { view: admin, create: admin, edit: admin, remove: admin };
 }
+
+/* ------------------------------- categories ------------------------------ */
+
+export interface CategoryPermissions {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  sort: boolean;
+  remove: boolean;
+}
+
+export function categoryPermissions(
+  user: Pick<User, "role"> | null | undefined,
+): CategoryPermissions {
+  const admin = hasRole(user, "ROLE_ADMIN");
+
+  return { view: admin, create: admin, edit: admin, sort: admin, remove: admin };
+}

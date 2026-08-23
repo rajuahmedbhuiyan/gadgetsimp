@@ -37,7 +37,7 @@ export const PANEL_ACCESS: Record<string, Role> = {
   "/admin/users": "ROLE_MODERATOR",
   "/admin/products": "ROLE_MODERATOR",
   "/admin/variations": "ROLE_MODERATOR",
-  "/admin/categories": "ROLE_MODERATOR",
+  "/admin/categories": "ROLE_ADMIN",
   "/admin/brands": "ROLE_MODERATOR",
   "/admin/attributes": "ROLE_ADMIN",
 };
