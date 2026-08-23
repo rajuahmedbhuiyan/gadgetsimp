@@ -8,8 +8,10 @@ const ApiError = require("../shared/ApiError");
 /**
  * Outbound email.
  *
- * Three transports, selected by MAIL_PROVIDER:
+ * Mail providers, selected by MAIL_PROVIDER:
  *
+ *   - **brevo** - Brevo transactional email over HTTPS. This works on hosts
+ *     such as Render Free that block outbound SMTP ports.
  *   - **gmail** - smtp.gmail.com over STARTTLS, authenticated with a Google
  *     App Password. Free, and capped at roughly 500 messages per day.
  *   - **smtp**  - any other SMTP server, configured through SMTP_*.
@@ -27,10 +29,10 @@ const ApiError = require("../shared/ApiError");
 let transport = null;
 const sentMessages = [];
 
-// Gmail's cap is a hard daily ceiling, and hitting it silently breaks signup
+// Provider free-tier caps are hard daily ceilings, and hitting one breaks signup
 // for everyone. This counts sends so the log warns on approach. It is
 // per-process and resets on restart, so treat it as an early-warning signal
-// rather than an accurate ledger - Google's own count is authoritative.
+// rather than an accurate ledger - the provider's own count is authoritative.
 let quota = { date: today(), sent: 0 };
 
 function today() {
@@ -94,6 +96,58 @@ function getTransport() {
   return transport;
 }
 
+function parseMailFrom(value) {
+  const match = String(value).match(/^\s*(?:"?([^"<]*)"?)?\s*<([^<>]+)>\s*$/);
+  if (match) {
+    return {
+      name: match[1]?.trim() || undefined,
+      email: match[2].trim(),
+    };
+  }
+
+  return { email: String(value).trim() };
+}
+
+async function brevoRequest(path, options = {}) {
+  const response = await fetch(`https://api.brevo.com/v3${path}`, {
+    ...options,
+    headers: {
+      accept: "application/json",
+      "api-key": env.BREVO_API_KEY,
+      ...(options.body ? { "content-type": "application/json" } : {}),
+      ...options.headers,
+    },
+  });
+
+  if (response.ok) return response;
+
+  const body = await response.text();
+  const error = new Error(`Brevo API ${response.status}: ${body}`);
+  error.code = "EBREVO";
+  error.responseCode = response.status;
+  error.response = body;
+  error.provider = "brevo";
+  throw error;
+}
+
+async function sendBrevoMail({ to, subject, html, text }) {
+  const sender = parseMailFrom(env.MAIL_FROM);
+
+  const response = await brevoRequest("/smtp/email", {
+    method: "POST",
+    body: JSON.stringify({
+      sender,
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  return { messageId: data.messageId };
+}
+
 /**
  * Confirms the mail credentials at startup rather than on a real user's
  * first signup.
@@ -103,6 +157,12 @@ async function verifyMailer() {
     logger.warn(
       "MAIL_PROVIDER=log - emails are written to the log, not sent. Set MAIL_PROVIDER=gmail to send for real."
     );
+    return;
+  }
+
+  if (env.MAIL_PROVIDER === "brevo") {
+    await brevoRequest("/account");
+    logger.info("Brevo transactional email API ready");
     return;
   }
 
@@ -127,7 +187,7 @@ function trackQuota(to) {
   if (remaining <= 0) {
     logger.error(
       { sent: quota.sent, quota: env.MAIL_DAILY_QUOTA, to },
-      "Daily email quota exhausted - Gmail will start rejecting messages and signups will fail"
+      "Daily email quota exhausted - the provider may start rejecting messages and signups will fail"
     );
   } else if (remaining <= env.MAIL_DAILY_QUOTA * 0.2) {
     logger.warn(
@@ -147,6 +207,31 @@ function trackQuota(to) {
  */
 function asDeliveryError(error) {
   const response = String(error?.response ?? error?.message ?? "");
+
+  if (error?.provider === "brevo") {
+    let providerMessage = response;
+
+    try {
+      const body = JSON.parse(response);
+      providerMessage = body.message || body.code || response;
+    } catch (_parseError) {
+      // Brevo usually returns JSON, but keep the raw text for non-JSON errors.
+    }
+
+    logger.error(
+      { err: error, status: error.responseCode, response },
+      "Brevo email delivery failed - check BREVO_API_KEY, verified sender/domain, and transactional email activation"
+    );
+
+    return new ApiError(503, "Brevo could not send that email. Check your verified sender and API key.", {
+      code: "BREVO_DELIVERY_FAILED",
+      errors: [
+        { field: "BREVO_API_KEY", message: `Brevo status ${error.responseCode}` },
+        { field: "MAIL_FROM", message: providerMessage },
+      ],
+      cause: error,
+    });
+  }
 
   // Gmail's daily cap. Distinctive enough to name, because the operator fix
   // (wait for the rolling 24h reset, or switch provider) is entirely
@@ -186,13 +271,17 @@ async function sendMail({ to, subject, html, text }) {
   let info;
 
   try {
-    info = await getTransport().sendMail({
-      from: env.MAIL_FROM,
-      to,
-      subject,
-      html,
-      text,
-    });
+    if (env.MAIL_PROVIDER === "brevo" && !env.isTest) {
+      info = await sendBrevoMail({ to, subject, html, text });
+    } else {
+      info = await getTransport().sendMail({
+        from: env.MAIL_FROM,
+        to,
+        subject,
+        html,
+        text,
+      });
+    }
   } catch (error) {
     throw asDeliveryError(error);
   }

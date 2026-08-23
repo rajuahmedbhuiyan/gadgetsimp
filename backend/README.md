@@ -276,8 +276,20 @@ plus one line in the registry.
 | Value | Behaviour |
 | --- | --- |
 | `log` (default) | Writes messages to the log, link included. No account needed — clone and register immediately. Refused when `NODE_ENV=production`. |
+| `brevo` | Brevo Transactional Email over HTTPS. Free tier available and works on Render Free because it does not use SMTP ports. |
 | `gmail` | `smtp.gmail.com` with a Google **App Password**. Free. |
 | `smtp` | Any other SMTP host. |
+
+For Render Free, use `MAIL_PROVIDER=brevo`. Render blocks outbound SMTP ports
+`25`, `465`, and `587` on free web services, so Gmail SMTP cannot work there
+even with correct credentials. Create a Brevo API key, verify your sender/domain
+in Brevo, then set:
+
+```env
+MAIL_PROVIDER=brevo
+BREVO_API_KEY=your_brevo_api_key
+MAIL_FROM=Your verified sender <you@example.com>
+```
 
 Gmail needs an App Password, **not** your Google password — Google blocks
 account passwords over SMTP. Enable 2-Step Verification, then create one at

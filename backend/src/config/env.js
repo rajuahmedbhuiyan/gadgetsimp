@@ -115,12 +115,16 @@ const envSchema = z.object({
   /**
    * Mail transport.
    *
-   * `gmail` fills in smtp.gmail.com automatically and only needs
-   * GMAIL_USER + GMAIL_APP_PASSWORD. `smtp` uses the SMTP_* values. `log`
-   * (the default) writes messages to the logger instead of sending them, so
-   * the signup flow works on a fresh clone with no mail account at all.
+   * `brevo` sends through Brevo's HTTPS API, which works on Render Free where
+   * outbound SMTP ports are blocked. `gmail` fills in smtp.gmail.com
+   * automatically and only needs GMAIL_USER + GMAIL_APP_PASSWORD. `smtp` uses
+   * the SMTP_* values. `log` (the default) writes messages to the logger
+   * instead of sending them, so the signup flow works on a fresh clone with no
+   * mail account at all.
    */
-  MAIL_PROVIDER: z.enum(["log", "gmail", "smtp"]).default("log"),
+  MAIL_PROVIDER: z.enum(["log", "brevo", "gmail", "smtp"]).default("log"),
+
+  BREVO_API_KEY: z.string().optional(),
 
   GMAIL_USER: z.string().optional(),
   // Google rejects account passwords over SMTP; this must be a 16-character
@@ -227,6 +231,14 @@ const envSchema = z.object({
             "required when MAIL_PROVIDER=gmail - a 16-character App Password, not your Google account password",
         });
       }
+    }
+
+    if (config.MAIL_PROVIDER === "brevo" && !config.BREVO_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["BREVO_API_KEY"],
+        message: "required when MAIL_PROVIDER=brevo",
+      });
     }
 
     if (config.MAIL_PROVIDER === "smtp" && !config.SMTP_HOST) {
