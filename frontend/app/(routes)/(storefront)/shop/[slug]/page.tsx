@@ -12,6 +12,7 @@ import {
   ProductSpecs,
 } from "@/components/product/detail/product-info";
 import { ProductShowcase } from "@/components/product/detail/product-showcase";
+import { ProductJsonLd } from "@/components/product/detail/product-json-ld";
 import {
   RelatedAside,
   RelatedAsideSkeleton,
@@ -22,6 +23,7 @@ import {
   RelatedProductsSkeleton,
 } from "@/components/product/detail/related-products";
 import { SectionTabs } from "@/components/product/detail/section-tabs";
+import { cleanText } from "@/lib/seo";
 
 const SECTIONS = [
   { id: "specifications", label: "Specifications" },
@@ -49,7 +51,7 @@ export async function generateMetadata(
     product.seo?.description ||
     product.shortDescription ||
     // The stored description is HTML; strip it before it becomes a meta tag.
-    product.description?.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+    cleanText(product.description, 160);
   const image = product.thumbnail?.src ?? product.images[0]?.src;
 
   return {
@@ -91,6 +93,8 @@ export default async function ProductPage(props: PageProps<"/shop/[slug]">) {
 
   return (
     <div className={`${container} pt-6 pb-28 lg:py-10`}>
+      <ProductJsonLd product={product} />
+
       <ProductBreadcrumb
         category={product.categoryIds[0]}
         productName={product.name}

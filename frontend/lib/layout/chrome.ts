@@ -17,6 +17,7 @@ export function hasBareChrome(pathname: string): boolean {
 }
 
 export function hasMobileTabChrome(pathname: string): boolean {
-  if (hasBareChrome(pathname)) return false;
-  return !pathname.startsWith("/shop/");
+  if (pathname === "/checkout" || pathname === "/checkout/success") return false;
+  if (pathname.startsWith("/shop/")) return false;
+  return true;
 }

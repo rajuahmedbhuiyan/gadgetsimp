@@ -44,6 +44,7 @@ export interface ProductCard {
   id: string;
   name: string;
   slug: string;
+  shortDescription?: string;
   productType: ProductType;
   status: string;
   featured: boolean;
@@ -59,6 +60,8 @@ export interface ProductCard {
   pricing: { min: number; max: number; currency: string };
   inStock: boolean;
   discountPercent: number;
+  publishedAt?: string | null;
+  updatedAt?: string;
 }
 
 /** The minimal tile shape `POST /shop/categories` returns. */
@@ -70,6 +73,7 @@ export interface ShopCategory {
   image: string | null;
   showInHome: boolean;
   sortOrder: number;
+  updatedAt?: string;
 }
 
 /* ----------------------------- product detail ---------------------------- */
