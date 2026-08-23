@@ -13,8 +13,6 @@ import Link from "next/link";
 import { parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 import {
   AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
   PackagePlus,
   PackageSearch,
   Plus,
@@ -23,7 +21,6 @@ import {
 
 import { cn } from "@/lib/utils";
 import type { AdminProductRow, AdminProductQuery } from "@/lib/api/admin/products";
-import type { PaginationMeta } from "@/lib/api/types";
 import { productPermissions } from "@/lib/panel/permissions";
 import { useAuth } from "@/lib/auth/auth-context";
 import {
@@ -46,12 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-} from "@/components/ui/pagination";
+import { Pager } from "@/components/panel/pager";
 import { ProductFilters, PRODUCT_SORTS } from "./product-filters";
 import { ProductsTable } from "./products-table";
 
@@ -177,13 +169,23 @@ export function ProductsView() {
               onDelete={setPendingDelete}
             />
 
-            {meta && meta.totalPages > 1 ? (
-              <Pager
-                meta={meta}
-                shown={products.length}
-                onPageChange={(next) => void setQuery({ page: next + 1 })}
-              />
-            ) : null}
+            {/*
+              * Rides the bottom edge, like the search and tabs ride the top.
+              * On a phone the card list is far taller than the viewport, and a
+              * pager you have to reach the end of to use is one people scroll
+              * past looking for. Negative margins take it to the edges of the
+              * shell's padding so the blur covers the full width.
+              */}
+            <div className="sticky bottom-0 z-20 -mx-4 -mb-4 border-t bg-background/95 px-4 py-3 supports-backdrop-filter:bg-background/80 supports-backdrop-filter:backdrop-blur-lg sm:-mx-6 sm:-mb-6 sm:px-6">
+              {meta ? (
+                <Pager
+                  meta={meta}
+                  shown={products.length}
+                  noun="products"
+                  onPageChange={(next) => void setQuery({ page: next + 1 })}
+                />
+              ) : null}
+            </div>
           </>
         )}
       </div>
@@ -220,111 +222,6 @@ export function ProductsView() {
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-/*
- * Seven slots, always: the first page, the last page, a window around the
- * current one, and an ellipsis wherever pages are skipped. The count is fixed
- * so the row keeps its width - page 9 does not slide out from under the
- * cursor that was aimed at page 8.
- *
- * Pages are zero-based here, as they are on the API; only the labels add one.
- */
-const PAGER_SLOTS = 7;
-
-function pagerItems(current: number, total: number): Array<number | "gap"> {
-  if (total <= PAGER_SLOTS) {
-    return Array.from({ length: total }, (_, index) => index);
-  }
-
-  const last = total - 1;
-
-  // Near either end there is nothing to elide on that side, so the window
-  // opens out instead and the single ellipsis moves to the far side.
-  if (current <= 3) return [0, 1, 2, 3, 4, "gap", last];
-  if (current >= last - 3) {
-    return [0, "gap", last - 4, last - 3, last - 2, last - 1, last];
-  }
-
-  return [0, "gap", current - 1, current, current + 1, "gap", last];
-}
-
-/**
- * Paging by number rather than by step.
- *
- * The buttons are buttons, not links: a page change here is the same shallow
- * URL write as every filter above it, so there is no navigation for an anchor
- * to describe.
- */
-function Pager({
-  meta,
-  shown,
-  onPageChange,
-}: {
-  meta: PaginationMeta;
-  shown: number;
-  onPageChange: (page: number) => void;
-}) {
-  const first = meta.page * meta.limit + 1;
-
-  return (
-    <div className="flex flex-col-reverse items-center justify-between gap-3 sm:flex-row">
-      <p className="text-sm text-muted-foreground tabular-nums">
-        {first}–{first + shown - 1} of {meta.total} products
-      </p>
-
-      <Pagination className="mx-0 w-auto justify-center sm:justify-end">
-        <PaginationContent className="gap-1 sm:gap-1.5">
-          <PaginationItem>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Previous page"
-              disabled={!meta.hasPrevPage}
-              onClick={() => onPageChange(meta.page - 1)}
-              className="size-9 cursor-pointer rounded-lg sm:size-10"
-            >
-              <ChevronLeft className="size-4" aria-hidden />
-            </Button>
-          </PaginationItem>
-
-          {pagerItems(meta.page, meta.totalPages).map((item, index) =>
-            item === "gap" ? (
-              <PaginationItem key={`gap-${index}`}>
-                <PaginationEllipsis className="size-9 sm:size-10" />
-              </PaginationItem>
-            ) : (
-              <PaginationItem key={item}>
-                <Button
-                  variant={item === meta.page ? "default" : "ghost"}
-                  size="icon"
-                  aria-label={`Page ${item + 1}`}
-                  aria-current={item === meta.page ? "page" : undefined}
-                  onClick={() => onPageChange(item)}
-                  className="size-9 cursor-pointer rounded-lg text-sm font-medium tabular-nums sm:size-10"
-                >
-                  {item + 1}
-                </Button>
-              </PaginationItem>
-            ),
-          )}
-
-          <PaginationItem>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Next page"
-              disabled={!meta.hasNextPage}
-              onClick={() => onPageChange(meta.page + 1)}
-              className="size-9 cursor-pointer rounded-lg sm:size-10"
-            >
-              <ChevronRight className="size-4" aria-hidden />
-            </Button>
-          </PaginationItem>
-        </PaginationContent>
-      </Pagination>
-    </div>
   );
 }
 

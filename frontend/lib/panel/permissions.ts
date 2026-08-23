@@ -34,3 +34,44 @@ export function productPermissions(
 
   return { view: staff, create: staff, edit: staff, remove: staff };
 }
+
+/* --------------------------------- orders -------------------------------- */
+
+export interface OrderPermissions {
+  view: boolean;
+  /** Move an order along the workflow. Moderators work the queue. */
+  changeStatus: boolean;
+  /** Correct the delivery details - name, phone, address, note. */
+  edit: boolean;
+  /** Soft delete: hides the order, keeps the financial record. */
+  remove: boolean;
+  /** Permanent delete. Irreversible, and there is nothing to undo it with. */
+  destroy: boolean;
+}
+
+/**
+ * Two gates, not one, because the API has two.
+ *
+ * `order.admin.routes.js` puts `authorize(ROLES.MODERATOR)` on the router and
+ * then raises the bar to `ROLES.ADMIN` on both delete routes individually. So
+ * a moderator genuinely works the queue - status changes, address corrections -
+ * and removing the record of a sale is a different kind of act, reserved for
+ * admins and the owner.
+ *
+ * `hasRole` is a minimum, so `ROLE_ADMIN` admits the owner without naming
+ * them - which is what stops a new senior role from having to be added here.
+ */
+export function orderPermissions(
+  user: Pick<User, "role"> | null | undefined,
+): OrderPermissions {
+  const staff = hasRole(user, "ROLE_MODERATOR");
+  const admin = hasRole(user, "ROLE_ADMIN");
+
+  return {
+    view: staff,
+    changeStatus: staff,
+    edit: staff,
+    remove: admin,
+    destroy: admin,
+  };
+}

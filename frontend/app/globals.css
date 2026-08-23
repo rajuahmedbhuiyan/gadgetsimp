@@ -163,8 +163,13 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  /* Borders carry more of this UI than they used to - the panel is tables,
+     tiles and cards stacked on near-white, and at 0.922 the edges between them
+     were close enough to the background to read as spacing rather than as
+     structure. `--input` sits a step darker again so a field looks like
+     something you type into and not like an empty tile. */
+  --border: oklch(0.885 0 0);
+  --input: oklch(0.865 0 0);
   --ring: oklch(0.79 0.164 79);
 
   --brand: oklch(0.798 0.164 79);
@@ -252,8 +257,11 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  /* White at 10% over a near-black surface is close to invisible on anything
+     but a good monitor in a dark room; these are the same two steps the light
+     theme takes, expressed as alpha. */
+  --border: oklch(1 0 0 / 18%);
+  --input: oklch(1 0 0 / 26%);
   --ring: oklch(0.812 0.166 80);
 
   --brand: oklch(0.812 0.166 80);
@@ -320,6 +328,7 @@
     @apply font-sans;
     /* Anchor links and `scrollIntoView` land below the sticky header. */
     scroll-padding-top: calc(var(--h-header) + 1rem);
+     
   }
 
   /* Tailwind v4's reset leaves buttons on the UA default of `cursor: default`.
