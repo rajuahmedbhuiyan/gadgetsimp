@@ -49,6 +49,7 @@ interface FacebookAuthResponse {
   accessToken: string;
   userID: string;
   expiresIn: number;
+  grantedScopes?: string;
 }
 
 interface FacebookLoginResponse {
@@ -65,7 +66,7 @@ interface FacebookSdk {
   }): void;
   login(
     callback: (response: FacebookLoginResponse) => void,
-    options?: { scope?: string; auth_type?: string },
+    options?: { scope?: string; auth_type?: string; return_scopes?: boolean },
   ): void;
   logout(callback?: () => void): void;
 }
@@ -185,7 +186,7 @@ export function facebookLogin(sdk: FacebookSdk): Promise<string> {
         // the dialog or declines - neither is an error worth shouting about.
         reject(new SocialCancelledError());
       },
-      { scope: "email" },
+      { scope: "email", auth_type: "rerequest", return_scopes: true },
     );
   });
 }
