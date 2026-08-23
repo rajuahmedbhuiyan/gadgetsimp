@@ -180,7 +180,7 @@ async function listCategories(params) {
   const [items, total] = await Promise.all([
     Category.find(filter)
       // Minimal shape: what a tile renders, nothing else.
-      .select({ _id: 1, name: 1, slug: 1, image: 1, showInHome: 1, sortOrder: 1, parentId: 1 })
+      .select({ _id: 1, name: 1, slug: 1, image: 1, showInHome: 1, sortOrder: 1, parentId: 1, updatedAt: 1 })
       .sort({ sortOrder: 1, name: 1 })
       .skip(page * limit)
       .limit(limit)

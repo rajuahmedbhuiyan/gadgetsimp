@@ -105,12 +105,15 @@ const CARD_PROJECTION = {
   _id: 1,
   name: 1,
   slug: 1,
+  shortDescription: 1,
   thumbnail: 1,
   productType: 1,
   featured: 1,
   currency: 1,
   sellingPrice: 1,
   originalPrice: 1,
+  publishedAt: 1,
+  updatedAt: 1,
   status: 1,
   brandId: {
     $let: {
