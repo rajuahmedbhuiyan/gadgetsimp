@@ -6,7 +6,7 @@ const createApp = require("../src/app");
 const Category = require("../src/modules/category/category.model");
 const Product = require("../src/modules/product/product.model");
 const Order = require("../src/modules/order/order.model");
-const { API, createUserAndLogin } = require("./helpers");
+const { API, createUserAndLogin, lastMessageTo, clearSentMessages } = require("./helpers");
 const { ROLES } = require("../src/shared/constants");
 
 const app = createApp();
@@ -176,7 +176,9 @@ describe("the staff queue", () => {
 
 describe("status workflow", () => {
   it("moves an order forward and records who did it", async () => {
-    const { order } = await placeOrder();
+    const email = "status-target@test.dev";
+    const { order } = await placeOrder({ body: { email } });
+    clearSentMessages();
 
     const response = await mod.status(order.id, { status: "CONFIRMED" });
 
@@ -191,6 +193,10 @@ describe("status workflow", () => {
       note: null,
       changedBy: moderator.id,
     });
+
+    const message = lastMessageTo(email);
+    expect(message.subject).toContain("CONFIRMED");
+    expect(message.text).toContain(`/orders/${order.id}`);
   });
 
   it("requires a note for a cancellation and for a return", async () => {

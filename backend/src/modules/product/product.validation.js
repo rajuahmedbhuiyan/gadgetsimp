@@ -5,6 +5,7 @@ const {
   PRODUCT_STATUS_VALUES,
   PRODUCT_VISIBILITY_VALUES,
   PRODUCT_TYPE_VALUES,
+  STOCK_STATUS_VALUES,
   PAGINATION,
 } = require("../../shared/constants");
 const { objectId, objectIdParam } = require("../../shared/validators");
@@ -306,11 +307,22 @@ const filters = z.record(attributeKey, filterValue).default({});
 
 const catalogQueryShape = {
     categoryId: objectId.optional(),
+    brandId: objectId.optional(),
+    status: z.enum(PRODUCT_STATUS_VALUES).optional(),
+    visibility: z.enum(PRODUCT_VISIBILITY_VALUES).optional(),
+    productType: z.enum(PRODUCT_TYPE_VALUES).optional(),
+    featured: z.boolean().optional(),
+    stockStatus: z.enum(STOCK_STATUS_VALUES).optional(),
+    price: rangeFilter.optional(),
+    createdFrom: z.coerce.date().optional(),
+    createdTo: z.coerce.date().optional(),
+    updatedFrom: z.coerce.date().optional(),
+    updatedTo: z.coerce.date().optional(),
     filters,
     search: z.string().trim().min(1).max(160).optional(),
     sort: z
       .object({
-        field: z.enum(["relevance", "price", "name", "createdAt"]).default("createdAt"),
+        field: z.enum(["relevance", "price", "name", "createdAt", "updatedAt"]).default("createdAt"),
         direction: z.enum(["asc", "desc"]).default("desc"),
       })
       .strict()

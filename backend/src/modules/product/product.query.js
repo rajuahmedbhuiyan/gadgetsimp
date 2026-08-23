@@ -52,6 +52,53 @@ function publicMatch({ categoryIds, search, featured, inStock, brandIds }) {
   return match;
 }
 
+function adminMatch({
+  categoryIds,
+  search,
+  featured,
+  brandIds,
+  status,
+  visibility,
+  productType,
+  stockStatus,
+  createdFrom,
+  createdTo,
+  updatedFrom,
+  updatedTo,
+}) {
+  const match = { deletedAt: null };
+
+  if (categoryIds?.length) {
+    match.categoryIds = {
+      $in: categoryIds.map((id) => new mongoose.Types.ObjectId(id)),
+    };
+  }
+  if (search) match.$text = { $search: search };
+  if (featured != null) match.featured = featured;
+  if (brandIds?.length) {
+    match.brandId = {
+      $in: brandIds.map((id) => new mongoose.Types.ObjectId(id)),
+    };
+  }
+  if (status) match.status = status;
+  if (visibility) match.visibility = visibility;
+  if (productType) match.productType = productType;
+  if (stockStatus) match["stock.status"] = stockStatus;
+
+  if (createdFrom || createdTo) {
+    match.createdAt = {};
+    if (createdFrom) match.createdAt.$gte = createdFrom;
+    if (createdTo) match.createdAt.$lte = createdTo;
+  }
+  if (updatedFrom || updatedTo) {
+    match.updatedAt = {};
+    if (updatedFrom) match.updatedAt.$gte = updatedFrom;
+    if (updatedTo) match.updatedAt.$lte = updatedTo;
+  }
+
+  return match;
+}
+
 /**
  * The same gate as `publicMatch()`, written as an aggregation **expression**
  * instead of a query.
@@ -252,11 +299,39 @@ async function listCatalog({
   featured,
   inStock,
   brandIds,
+  status,
+  visibility,
+  productType,
+  stockStatus,
   price,
+  createdFrom,
+  createdTo,
+  updatedFrom,
+  updatedTo,
+  publicOnly = true,
   projection = "full",
 }) {
   const { page, limit } = pagination;
-  const pipeline = [{ $match: publicMatch({ categoryIds, search, featured, inStock, brandIds }) }];
+  const pipeline = [
+    {
+      $match: publicOnly
+        ? publicMatch({ categoryIds, search, featured, inStock, brandIds })
+        : adminMatch({
+            categoryIds,
+            search,
+            featured,
+            brandIds,
+            status,
+            visibility,
+            productType,
+            stockStatus,
+            createdFrom,
+            createdTo,
+            updatedFrom,
+            updatedTo,
+          }),
+    },
+  ];
   if (search) pipeline.push({ $addFields: { _searchScore: { $meta: "textScore" } } });
   pipeline.push(...applyFilters(filters));
   pipeline.push(matchingVariantsLookup([], "_priceStats", { groupByPrice: true }));
@@ -304,6 +379,8 @@ async function listCatalog({
               },
             },
             productType: 1,
+            status: 1,
+            visibility: 1,
             featured: 1,
             tags: 1,
             attributes: 1,

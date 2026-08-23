@@ -21,6 +21,19 @@ const durationString = z
   .string()
   .regex(/^\d+(ms|s|m|h|d)$/, "expected a duration like 15m, 7d, 900s");
 
+const optionalUrl = (name) =>
+  z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.url(`${name} must be a valid URL`).optional()
+  );
+
+const disableFlag = z
+  .preprocess(
+    (value) => (value == null || value === "" ? "false" : value),
+    z.enum(["true", "false"])
+  )
+  .transform((value) => value === "true");
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -111,6 +124,7 @@ const envSchema = z.object({
 
   // Where the verification link points - the frontend, not the API.
   APP_URL: z.url("APP_URL must be a valid URL").default("http://localhost:3000"),
+  LOGO_URL: optionalUrl("LOGO_URL"),
 
   /**
    * Mail transport.
@@ -144,6 +158,12 @@ const envSchema = z.object({
   // Free Gmail allows roughly 500 messages/day (Workspace ~2000). Used to warn
   // as the budget is consumed rather than discovering it via bounced signups.
   MAIL_DAILY_QUOTA: z.coerce.number().int().positive().default(500),
+
+  // Order email switches. Empty, false or missing means "send"; only true
+  // disables the corresponding message.
+  DISABLE_ORDER_MAIN: disableFlag.default(false),
+  DISABLE_ORDER_STATUS: disableFlag.default(false),
+  DISABLE_ORDER_CUSTOMER: disableFlag.default(false),
 
   /**
    * Social sign-in. Each provider is independently optional - an unconfigured
@@ -213,7 +233,7 @@ const envSchema = z.object({
   // Optional self-ping for free hosts that sleep after idle inbound traffic.
   // An external monitor is still more reliable, because an in-process timer
   // cannot wake a service that has already been suspended.
-  KEEP_ALIVE_URL: z.url("KEEP_ALIVE_URL must be a valid URL").optional(),
+  KEEP_ALIVE_URL: optionalUrl("KEEP_ALIVE_URL"),
   KEEP_ALIVE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(60).default(10),
 })
   /**

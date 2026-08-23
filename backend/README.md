@@ -289,6 +289,7 @@ in Brevo, then set:
 MAIL_PROVIDER=brevo
 BREVO_API_KEY=your_brevo_api_key
 MAIL_FROM=Your verified sender <you@example.com>
+LOGO_URL=https://your-cdn.example.com/gadgetsimp-logo.png
 ```
 
 Gmail needs an App Password, **not** your Google password — Google blocks
@@ -335,6 +336,18 @@ Buttons are **dark ink on amber, not white**: white on `#febc01` measures
 **1.69:1**, far below the 4.5:1 WCAG AA minimum — `#1a1a1a` gives 10.3:1. The
 templates also declare `color-scheme: light` so iOS and Outlook dark modes
 cannot invert the amber into mud.
+
+Set `LOGO_URL` to a public HTTPS image URL to show the GadgetSimp logo in every
+transactional email. Leave it empty to fall back to the text brand.
+
+Order emails are enabled by default. Only the literal string `true` disables a
+message:
+
+```env
+DISABLE_ORDER_MAIN=false      # new order notification to gadgetsimp6@gmail.com
+DISABLE_ORDER_STATUS=false    # status update email to the customer
+DISABLE_ORDER_CUSTOMER=false  # order confirmation email to the customer
+```
 
 ### Password recovery
 

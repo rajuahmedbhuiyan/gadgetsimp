@@ -6,7 +6,13 @@ const Cart = require("../cart/cart.model");
 const Product = require("../product/product.model");
 const Variant = require("../product/variant.model");
 const ApiError = require("../../shared/ApiError");
+const env = require("../../config/env");
 const logger = require("../../config/logger");
+const { sendMail } = require("../../config/mailer");
+const {
+  customerOrderPlacedEmail,
+  mainOrderPlacedEmail,
+} = require("./order.emails");
 const {
   loadSelections,
   checkSelection,
@@ -483,6 +489,8 @@ async function placeOrder(input, { actor = null, client = {} } = {}) {
       );
     }
 
+    await sendOrderPlacedEmails(order.toObject());
+
     const accountInvite = await inviteIfRequested(input, {
       actor,
       email,
@@ -499,6 +507,37 @@ async function placeOrder(input, { actor = null, client = {} } = {}) {
 
     throw error;
   }
+}
+
+async function sendOrderPlacedEmails(order) {
+  const tasks = [];
+
+  if (!env.DISABLE_ORDER_MAIN) {
+    tasks.push(
+      sendMail({
+        to: "gadgetsimp6@gmail.com",
+        ...mainOrderPlacedEmail({ order }),
+      }).catch((error) =>
+        logger.error({ err: error, orderId: order._id }, "Failed to send main order notification")
+      )
+    );
+  }
+
+  if (!env.DISABLE_ORDER_CUSTOMER && order.email) {
+    tasks.push(
+      sendMail({
+        to: order.email,
+        ...customerOrderPlacedEmail({ order }),
+      }).catch((error) =>
+        logger.error(
+          { err: error, orderId: order._id, email: order.email },
+          "Failed to send customer order confirmation"
+        )
+      )
+    );
+  }
+
+  await Promise.all(tasks);
 }
 
 /**

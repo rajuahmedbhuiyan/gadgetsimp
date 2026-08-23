@@ -8,7 +8,13 @@ const Product = require("../src/modules/product/product.model");
 const Variant = require("../src/modules/product/variant.model");
 const Order = require("../src/modules/order/order.model");
 const Cart = require("../src/modules/cart/cart.model");
-const { API, createUserAndLogin, verificationTokenFor, lastMessageTo } = require("./helpers");
+const {
+  API,
+  createUserAndLogin,
+  verificationTokenFor,
+  lastMessageTo,
+  getSentMessages,
+} = require("./helpers");
 
 const app = createApp();
 
@@ -86,6 +92,25 @@ describe("placing an order", () => {
       shippingFee: 70,
       total: 2070,
     });
+  });
+
+  it("emails the store and the customer when an order has an email", async () => {
+    const product = await makeProduct();
+    const email = "rahim.order@test.dev";
+
+    const response = await place({
+      email,
+      items: [{ productId: String(product._id), quantity: 1 }],
+    });
+
+    expect(response.status).toBe(201);
+
+    const messages = getSentMessages();
+    expect(messages.some((message) => message.to === "gadgetsimp6@gmail.com")).toBe(true);
+
+    const customer = lastMessageTo(email);
+    expect(customer.subject).toContain(response.body.data.order.orderNumber);
+    expect(customer.text).toContain(`/orders/${response.body.data.order.id}`);
   });
 
   it("gives every order an integer id and a unique six-digit number", async () => {

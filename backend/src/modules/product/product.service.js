@@ -459,7 +459,13 @@ async function list(params) {
   const categoryIds = await categoryScope(params.categoryIds ?? params.categoryId);
   const metadata = await filterMetadata(categoryIds);
   const normalized = normalizeFilters(params.filters, metadata);
-  return query.listCatalog({ ...params, categoryIds, filters: normalized });
+  return query.listCatalog({
+    ...params,
+    categoryIds,
+    brandIds: params.brandId ? [params.brandId] : undefined,
+    filters: normalized,
+    publicOnly: false,
+  });
 }
 
 function fallbackLabel(value) {

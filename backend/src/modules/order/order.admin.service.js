@@ -2,7 +2,10 @@
 
 const Order = require("./order.model");
 const ApiError = require("../../shared/ApiError");
+const env = require("../../config/env");
 const logger = require("../../config/logger");
+const { sendMail } = require("../../config/mailer");
+const { orderStatusEmail } = require("./order.emails");
 const {
   presentOrder,
   releaseOrderStock,
@@ -153,6 +156,7 @@ async function changeStatus(orderId, { status, note }, actor) {
   }
 
   const trimmedNote = note?.trim() || null;
+  const previousStatus = order.status;
 
   if (ORDER_NEGATIVE_STATUSES.includes(status) && !trimmedNote) {
     throw ApiError.unprocessable(`A note is required when marking an order ${status}.`, {
@@ -191,12 +195,31 @@ async function changeStatus(orderId, { status, note }, actor) {
 
   await order.save();
 
+  await sendStatusUpdateEmail(order.toObject(), {
+    previousStatus,
+    note: trimmedNote,
+  });
+
   logger.info(
     { orderId: order._id, status, actorId: actor.id },
     "Order status changed"
   );
 
   return presentOrder(order.toObject(), { forStaff: true });
+}
+
+async function sendStatusUpdateEmail(order, { previousStatus, note }) {
+  if (env.DISABLE_ORDER_STATUS || !order.email) return;
+
+  await sendMail({
+    to: order.email,
+    ...orderStatusEmail({ order, previousStatus, note }),
+  }).catch((error) =>
+    logger.error(
+      { err: error, orderId: order._id, email: order.email },
+      "Failed to send order status update email"
+    )
+  );
 }
 
 /**
